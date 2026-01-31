@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser, SignOutButton } from "@clerk/nextjs";
+import { useUser, useAuth, SignOutButton } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,7 @@ type LookupStep = "scanning" | "loading" | "display";
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("users");
   const [lookupStep, setLookupStep] = useState<LookupStep>("scanning");
   const [isScanning, setIsScanning] = useState(false);
@@ -48,7 +49,12 @@ export default function AdminDashboard() {
     setLookupStep("loading");
 
     try {
-      const result = await userInfoMutation.mutateAsync(fingerprintId);
+      // Get Clerk JWT token for authentication
+      const clerkToken = await getToken();
+      const result = await userInfoMutation.mutateAsync({
+        fingerprintHash: fingerprintId,
+        clerkToken: clerkToken || undefined,
+      });
       setCitizenInfo(result);
       setLookupStep("display");
     } catch (error) {

@@ -73,20 +73,15 @@ async def get_current_user(
     """
     # No authorization header provided
     if not authorization or not authorization.startswith("Bearer "):
-        logger.debug(f"[AUTH] No bearer token in authorization header")
+        logger.debug("[AUTH] No bearer token in authorization header")
         return None
 
     # Extract the token
     token = authorization.replace("Bearer ", "")
-    
-    # Debug: show what we're checking
-    logger.info(f"[AUTH] Token received: {token[:20]}...")
-    logger.info(f"[AUTH] API keys configured: {settings.api_keys_list}")
-    logger.info(f"[AUTH] Token in api_keys_list: {token in settings.api_keys_list}")
 
-    # Check if it's a static API key first
+    # Check if it's a static API key first (for M2M / service dashboard auth)
     if token in settings.api_keys_list:
-        logger.info(f"[AUTH] API key matched! Returning service user")
+        logger.debug("[AUTH] API key matched - returning service user")
         # Return a service user for API key auth
         return AuthenticatedUser(
             user_id="service",
@@ -116,21 +111,15 @@ async def require_auth(
     """
     FastAPI dependency that requires authentication.
 
-    Raises 401 Unauthorized if user is not authenticated.
-
-    Args:
-        user: The current user from get_current_user dependency.
-
-    Returns:
-        AuthenticatedUser if authenticated.
-
-    Raises:
-        HTTPException: 401 if not authenticated.
+    Raises HTTPException 401 if not authenticated.
+    Supports both:
+    - Clerk JWT tokens (for gov/admin dashboards)
+    - Static API keys (for service dashboard M2M auth)
     """
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail="Authentication required",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return user
