@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     clerk_publishable_key: str | None = None  # pk_test_xxx or pk_live_xxx
     clerk_jwks_url: str | None = None  # Auto-derived if not set
 
+    # OpenRouter LLM Configuration
+    openrouter_api_key: str | None = None  # sk-or-v1-xxx
+    llm_model: str = "anthropic/claude-3.5-sonnet"  # OpenRouter model identifier
+
     # Application
     app_env: str = "development"
     debug: bool = True
@@ -47,6 +51,11 @@ class Settings(BaseSettings):
     def clerk_configured(self) -> bool:
         """Check if Clerk authentication is configured."""
         return self.clerk_secret_key is not None
+
+    @property
+    def llm_configured(self) -> bool:
+        """Check if LLM (OpenRouter) is configured."""
+        return self.openrouter_api_key is not None
 
 
 @lru_cache

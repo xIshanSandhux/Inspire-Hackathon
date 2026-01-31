@@ -40,21 +40,25 @@ def get_document_reader_service() -> DocumentReaderService:
     Factory function to get the configured document reader service.
     
     Returns the appropriate implementation based on settings.document_reader_service.
+    Injects the LLM parser into readers that need it for structured extraction.
     """
     from backend.core.services.document_ai_reader import DocumentAIReaderService
+    from backend.core.services.llm.dependencies import get_document_llm_parser
     from backend.core.services.ocr_document_reader import OCRDocumentReaderService
 
     service_type = settings.document_reader_service.lower()
 
     if service_type == "document_ai":
+        # Document AI handles its own structured extraction - no LLM needed
         return DocumentAIReaderService(
             project_id=settings.gcp_project_id,
             location=settings.gcp_location,
             processor_id=settings.document_ai_processor_id,
         )
     else:
-        # Default to OCR stub
-        return OCRDocumentReaderService()
+        # OCR reader uses LLM parser for structured extraction (if configured)
+        llm_parser = get_document_llm_parser()
+        return OCRDocumentReaderService(llm_parser=llm_parser)
 
 
 # Type alias for dependency injection
