@@ -57,10 +57,10 @@ class OCRDocumentReaderService:
 
     async def extract_from_image(self, image: UploadFile) -> ExtractedDocument:
         """
-        Extract document data from an uploaded image using OCR.
+        Extract document data from an uploaded image.
 
-        If an LLM parser is configured, the raw OCR text is parsed into
-        structured document data. Otherwise, returns the raw text.
+        Uses vision LLM to extract structured data directly from the image.
+        Falls back to OCR + text parsing if vision fails.
 
         Args:
             image: The uploaded document image file.
@@ -70,23 +70,32 @@ class OCRDocumentReaderService:
         """
         # Read image bytes
         image_bytes = await image.read()
+        mime_type = image.content_type or "image/jpeg"
         
-        # Extract raw text via OCR
-        raw_text = self._extract_raw_text(image_bytes)
-        
-        # If LLM parser is available, use it for structured extraction
+        # If LLM parser is available, use vision to parse image directly
         if self.llm_parser:
             try:
-                parsed = await self.llm_parser.parse_async(raw_text, image.filename)
-                return self._convert_parsed_to_extracted(parsed, raw_text, image)
+                # Try vision-based parsing first (sends image directly to LLM)
+                parsed = await self.llm_parser.parse_image_async(
+                    image_bytes, mime_type, image.filename
+                )
+                return self._convert_parsed_to_extracted(parsed, "[vision]", image)
             except Exception as e:
-                # Fallback to raw text on LLM failure
+                # Fallback: try OCR + text parsing
+                try:
+                    raw_text = self._extract_raw_text(image_bytes)
+                    if not raw_text.startswith("[OCR STUB]"):
+                        parsed = await self.llm_parser.parse_async(raw_text, image.filename)
+                        return self._convert_parsed_to_extracted(parsed, raw_text, image)
+                except Exception:
+                    pass  # Fall through to error response
+                
+                # Return error response
                 return ExtractedDocument(
                     document_type="unknown",
                     document_id="PARSE_ERROR",
                     metadata={
                         "service": "ocr",
-                        "raw_text": raw_text,
                         "llm_error": str(e),
                         "filename": image.filename,
                         "content_type": image.content_type,
@@ -95,7 +104,8 @@ class OCRDocumentReaderService:
                     confidence=0.0,
                 )
         
-        # No LLM parser - return raw text only
+        # No LLM parser - try OCR only
+        raw_text = self._extract_raw_text(image_bytes)
         return ExtractedDocument(
             document_type="unknown",
             document_id="UNKNOWN",

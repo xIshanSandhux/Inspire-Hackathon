@@ -3,7 +3,20 @@
 from typing import Any
 
 from clerk_backend_api import Clerk
-from clerk_backend_api.models import errors as clerk_errors
+
+# Handle different versions of clerk_backend_api SDK
+try:
+    from clerk_backend_api.models import errors as clerk_errors
+
+    ClerkSDKError = clerk_errors.SDKError
+except ImportError:
+    try:
+        from clerk_backend_api import errors as clerk_errors
+
+        ClerkSDKError = clerk_errors.SDKError
+    except (ImportError, AttributeError):
+        # Fallback to generic Exception if SDK errors not available
+        ClerkSDKError = Exception  # type: ignore
 
 
 class ClerkClient:
@@ -41,7 +54,7 @@ class ClerkClient:
             Dictionary containing the token and metadata.
 
         Raises:
-            clerk_errors.SDKError: If the API request fails.
+            ClerkSDKError: If the API request fails.
         """
         result = await self._client.m2m_tokens.create_async(
             seconds_until_expiration=seconds_until_expiration,
@@ -78,7 +91,7 @@ class ClerkClient:
             Dictionary containing the created user data.
 
         Raises:
-            clerk_errors.SDKError: If the API request fails.
+            ClerkSDKError: If the API request fails.
         """
         user = await self._client.users.create_async(
             email_address=[email],
@@ -128,7 +141,7 @@ class ClerkClient:
                 "created_at": user.created_at,
                 "updated_at": user.updated_at,
             }
-        except clerk_errors.SDKError:
+        except ClerkSDKError:
             return None
 
     async def delete_user(self, user_id: str) -> bool:
@@ -144,5 +157,5 @@ class ClerkClient:
         try:
             await self._client.users.delete_async(user_id=user_id)
             return True
-        except clerk_errors.SDKError:
+        except ClerkSDKError:
             return False

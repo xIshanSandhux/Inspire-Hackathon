@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -16,8 +17,13 @@ TEST_ENCRYPTION_KEY = Fernet.generate_key().decode()
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 os.environ["ENCRYPTION_KEY"] = TEST_ENCRYPTION_KEY
 
+from backend.core.auth.dependencies import require_auth
+from backend.core.auth.schemas import AuthenticatedUser
 from backend.core.db import Base, get_db
 from backend.main import app
+
+# Test resources directory
+RESOURCES_DIR = Path(__file__).parent / "resources" / "documents"
 
 
 # Create test database engine
@@ -57,10 +63,21 @@ def db_session() -> Generator[Session, None, None]:
         Base.metadata.drop_all(bind=test_engine)
 
 
+@pytest.fixture
+def mock_user() -> AuthenticatedUser:
+    """Mock authenticated user for testing."""
+    return AuthenticatedUser(
+        user_id="test-user-123",
+        session_id="test-session-456",
+        claims={"email": "test@example.com"},
+    )
+
+
 @pytest.fixture(scope="function")
-def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """Create a test client with database override."""
+def client(db_session: Session, mock_user: AuthenticatedUser) -> Generator[TestClient, None, None]:
+    """Create a test client with database and auth overrides."""
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_auth] = lambda: mock_user
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -82,3 +99,37 @@ def sample_image_bytes() -> bytes:
         b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
         b"\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
     )
+
+
+# =============================================================================
+# Test Document Image Fixtures
+# =============================================================================
+# These fixtures load real document images from the resources folder.
+# Place your test images in: backend/tests/resources/documents/
+
+
+@pytest.fixture
+def drivers_license_image() -> bytes:
+    """Load driver's license test image from resources."""
+    image_path = RESOURCES_DIR / "drivers_license.jpg"
+    if not image_path.exists():
+        pytest.skip(f"Test image not found: {image_path}")
+    return image_path.read_bytes()
+
+
+@pytest.fixture
+def passport_image() -> bytes:
+    """Load passport test image from resources."""
+    image_path = RESOURCES_DIR / "passport.jpg"
+    if not image_path.exists():
+        pytest.skip(f"Test image not found: {image_path}")
+    return image_path.read_bytes()
+
+
+@pytest.fixture
+def health_card_image() -> bytes:
+    """Load health card test image from resources."""
+    image_path = RESOURCES_DIR / "health_card.jpg"
+    if not image_path.exists():
+        pytest.skip(f"Test image not found: {image_path}")
+    return image_path.read_bytes()

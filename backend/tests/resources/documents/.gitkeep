@@ -1,0 +1,7 @@
+# Place test document images in this folder:
+# - drivers_license.jpg
+# - passport.jpg
+# - health_card.jpg
+#
+# These images will be used by E2E tests to verify document parsing.
+# Do not commit real identity documents to version control.

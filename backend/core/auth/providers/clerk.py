@@ -4,10 +4,23 @@ from typing import Any
 
 import jwt
 from clerk_backend_api import Clerk
-from clerk_backend_api.models import errors as clerk_errors
 from jwt import PyJWKClient
 
 from .base import AuthProvider
+
+# Handle different versions of clerk_backend_api SDK
+try:
+    from clerk_backend_api.models import errors as clerk_errors
+
+    ClerkSDKError = clerk_errors.SDKError
+except ImportError:
+    try:
+        from clerk_backend_api import errors as clerk_errors
+
+        ClerkSDKError = clerk_errors.SDKError
+    except (ImportError, AttributeError):
+        # Fallback to generic Exception if SDK errors not available
+        ClerkSDKError = Exception  # type: ignore
 
 
 class ClerkAuthProvider(AuthProvider):
@@ -103,5 +116,5 @@ class ClerkAuthProvider(AuthProvider):
                 "created_at": user.created_at,
                 "updated_at": user.updated_at,
             }
-        except clerk_errors.SDKError:
+        except ClerkSDKError:
             return None

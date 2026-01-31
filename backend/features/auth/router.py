@@ -1,9 +1,8 @@
 """API routes for Clerk authentication proxy endpoints."""
 
-from clerk_backend_api.models import errors as clerk_errors
 from fastapi import APIRouter, HTTPException, status
 
-from backend.core.auth.client import ClerkClient
+from backend.core.auth.client import ClerkClient, ClerkSDKError
 from backend.core.config import settings
 
 from .schemas import (
@@ -53,7 +52,7 @@ async def create_m2m_token():
             token=result.get("token", ""),
             expires_at=result.get("expires_at"),
         )
-    except clerk_errors.SDKError as e:
+    except ClerkSDKError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Clerk API error: {str(e)}",
@@ -103,7 +102,7 @@ async def create_user(request: CreateUserRequest):
             last_name=result.get("last_name"),
             public_metadata=result.get("public_metadata", {}),
         )
-    except clerk_errors.SDKError as e:
+    except ClerkSDKError as e:
         # Forward Clerk's error response
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

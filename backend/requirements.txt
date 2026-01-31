@@ -9,6 +9,7 @@ alembic>=1.13.1
 # Settings and validation
 pydantic>=2.6.0
 pydantic-settings>=2.1.0
+email-validator>=2.0.0
 
 # Encryption
 cryptography>=42.0.0
