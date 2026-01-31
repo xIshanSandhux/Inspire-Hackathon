@@ -2,7 +2,10 @@ export {};
 
 declare global {
   interface CustomJwtSessionClaims {
-    metadata: {
+    metadata?: {
+      role?: "gov" | "admin" | "service";
+    };
+    publicMetadata?: {
       role?: "gov" | "admin" | "service";
     };
   }

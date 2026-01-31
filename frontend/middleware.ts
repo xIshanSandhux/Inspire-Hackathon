@@ -18,8 +18,7 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.next();
   }
 
-  const { userId, sessionClaims } = await auth();
-  const role = sessionClaims?.metadata?.role as string | undefined;
+  const { userId } = await auth();
 
   // If not signed in with Clerk, redirect to appropriate login page
   if (!userId) {
@@ -32,14 +31,8 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  // Role-based access control for Clerk-authenticated users
-  if (isGovRoute(req) && role !== "gov") {
-    return NextResponse.redirect(new URL("/auth/gov", req.url));
-  }
-
-  if (isAdminRoute(req) && role !== "admin") {
-    return NextResponse.redirect(new URL("/auth/admin", req.url));
-  }
+  // Role-based access control is handled client-side by the dashboard pages
+  // They check user.publicMetadata.role and redirect if needed
 
   return NextResponse.next();
 });

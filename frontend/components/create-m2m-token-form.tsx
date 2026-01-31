@@ -23,8 +23,7 @@ export function CreateM2MTokenForm() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tokenData, setTokenData] = useState<{
     token: string;
-    expiresAt: string;
-    validityDays: number;
+    expiresAt: string | null;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -35,8 +34,7 @@ export function CreateM2MTokenForm() {
       const result = await createTokenMutation.mutateAsync();
       setTokenData({
         token: result.token,
-        expiresAt: result.expiresAt,
-        validityDays: result.validityDays,
+        expiresAt: result.expires_at,
       });
       setDialogOpen(true);
     } catch {
@@ -130,7 +128,7 @@ export function CreateM2MTokenForm() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Valid For</p>
-                <p className="font-medium">{tokenData?.validityDays} days</p>
+                <p className="font-medium">365 days</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Expires</p>
