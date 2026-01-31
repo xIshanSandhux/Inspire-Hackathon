@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     # Encryption (generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     encryption_key: str = "your-fernet-key-here-generate-one"
 
+    # Document Reader Service: "ocr" or "document_ai"
+    document_reader_service: str = "ocr"
+
+    # Google Document AI Configuration (required if document_reader_service=document_ai)
+    gcp_project_id: str | None = None
+    gcp_location: str = "us"  # "us" or "eu" for Document AI
+    document_ai_processor_id: str | None = None  # Identity document processor ID
+
     # Application
     app_env: str = "development"
     debug: bool = True

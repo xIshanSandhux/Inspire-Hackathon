@@ -13,6 +13,9 @@ pydantic-settings>=2.1.0
 # Encryption
 cryptography>=42.0.0
 
+# AI/ML - Document AI for identity document processing
+google-cloud-documentai>=2.20.0
+
 # Utilities
 python-multipart>=0.0.6
 python-dotenv>=1.0.0
