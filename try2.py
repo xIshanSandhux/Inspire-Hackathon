@@ -33,7 +33,9 @@ def ocr_stuff():
     result = reader.readtext(IMAGE_PATH)
 
     for _,text,_ in result:
-        print(f"{text}")
+        # print(f"{text}")
+        if text.startswith("NDL") or text.startswith("LDL") or text.startswith("BCID"):
+            print(f"{text}")
 
 if __name__=="__main__":
     cap_image()
