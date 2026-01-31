@@ -3,12 +3,14 @@
 from fastapi import APIRouter, HTTPException, status
 
 from backend.core.auth.client import ClerkClient, ClerkSDKError
+from backend.core.auth.dependencies import CurrentUser
 from backend.core.config import settings
 
 from .schemas import (
     CreateM2MTokenResponse,
     CreateUserRequest,
     CreateUserResponse,
+    ValidateTokenResponse,
 )
 
 router = APIRouter()
@@ -113,3 +115,23 @@ async def create_user(request: CreateUserRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create user: {str(e)}",
         )
+
+
+@router.get("/validate", response_model=ValidateTokenResponse)
+async def validate_token(user: CurrentUser):
+    """
+    Validate the current authentication token.
+
+    This endpoint checks if the provided Bearer token is valid.
+    Supports both API keys (for service providers) and Clerk JWTs.
+
+    Returns:
+        ValidateTokenResponse: Whether the token is valid and its type.
+    """
+    if user is None:
+        return ValidateTokenResponse(valid=False, user_type=None)
+    
+    # Determine user type from claims
+    user_type = "service" if user.claims.get("type") == "api_key" else "user"
+    
+    return ValidateTokenResponse(valid=True, user_type=user_type)
