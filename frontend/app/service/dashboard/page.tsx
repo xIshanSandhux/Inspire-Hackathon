@@ -127,6 +127,14 @@ export default function ServiceDashboard() {
             issue_date: "2020-01-01",
           },
         },
+        bcid: {
+          id: "ABC123456",
+          metadata: {
+            issuing_authority: "British Columbia",
+            date_of_birth: "1990-01-15",
+            expiry_date: "2030-12-31",
+          },
+        },
       };
       const mock = mockData[backendType] || mockData.drivers_license;
       setExtractedDocument({

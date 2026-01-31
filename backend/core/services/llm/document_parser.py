@@ -99,6 +99,43 @@ IMPORTANT: Remove any spaces. If you see "9012 345 678", return "9012345678".
 Set document_type to "bc_services"."""
 
 
+# Tailored prompt for BC ID Card
+BCID_PROMPT = """You are an expert at extracting data from BC ID Cards (British Columbia identification cards).
+
+TASK: Extract all information from this BC ID Card image.
+
+## CRITICAL: Finding the BCID Number (unique_id)
+
+The BCID is the MOST IMPORTANT field. It appears on the card in the form:
+
+  BCID: <string>
+
+WHERE TO FIND IT:
+- Look for the label "BCID:" (or "BCID ") on the card
+- The value follows the colon/space - it may be alphanumeric (letters and digits)
+- Example: "BCID: ABC123456" or "BCID 123456789"
+
+FORMAT: Extract ONLY the string after "BCID:" or "BCID ". Do not include "BCID:" in unique_id.
+Examples: "ABC123456", "123456789", "XY-123456"
+
+IMPORTANT: Extract ONLY the value after the label, not the "BCID:" prefix.
+
+## Other Required Fields
+
+| Field | What to Look For | Format |
+|-------|------------------|--------|
+| first_name | Given name | Exactly as shown |
+| last_name | Family/surname | Exactly as shown |
+| date_of_birth | "DATE OF BIRTH", "DOB" | Convert to YYYY-MM-DD |
+| expiry_date | Card expiry date if shown | Convert to YYYY-MM-DD |
+| issue_date | Issue date if shown | Convert to YYYY-MM-DD |
+| address | Mailing address | Full address string |
+| sex | Sex/Gender | "M", "F", or "X" |
+| issuing_authority | Should be "British Columbia" or similar | |
+
+Set document_type to "bcid"."""
+
+
 # Tailored prompt for Passport
 PASSPORT_PROMPT = """You are an expert at extracting data from passports.
 
@@ -167,6 +204,7 @@ Set document_type to "health_card"."""
 DOCUMENT_TYPE_PROMPTS = {
     "drivers_license": DRIVERS_LICENSE_PROMPT,
     "bc_services": BC_SERVICES_PROMPT,
+    "bcid": BCID_PROMPT,
     "passport": PASSPORT_PROMPT,
     "health_card": HEALTH_CARD_PROMPT,
 }

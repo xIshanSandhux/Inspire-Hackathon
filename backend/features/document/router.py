@@ -31,6 +31,7 @@ async def add_document(
     Supported document_type values for tailored extraction:
     - drivers_license: Driver's license (looks for 9-digit number near DL/NDL/LDL)
     - bc_services: BC Services Card (looks for 10-digit PHN)
+    - bcid: BC ID Card (ID on card in form BCID: <string>; metadata: DOB, name, etc.)
     - passport: Passport (looks for passport number in MRZ or header)
     - health_card: Generic health card
 

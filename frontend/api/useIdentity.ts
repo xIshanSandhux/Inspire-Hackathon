@@ -11,9 +11,8 @@ export const DEMO_FINGERPRINT_ID = "fp_demo_123456789";
 export const DOCUMENT_TYPES = {
   DRIVERS_LICENSE: "drivers_license",
   BC_SERVICES: "bc_services",
+  BCID: "bcid", // BC ID Card (ID format: BCID: <string>)
   PASSPORT: "passport",
-  // Legacy aliases
-  BCID: "bc_services",
 } as const;
 
 export type FrontendDocumentType = keyof typeof DOCUMENT_TYPES;

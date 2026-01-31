@@ -10,7 +10,7 @@ const DOCUMENT_LABELS: Record<FrontendDocumentType, string> = {
   DRIVERS_LICENSE: "Driver's License",
   PASSPORT: "Passport",
   BC_SERVICES: "BC Services Card",
-  BCID: "BC Services Card",
+  BCID: "BC ID Card",
 };
 
 interface CameraCaptureProps {

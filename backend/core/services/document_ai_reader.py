@@ -332,6 +332,10 @@ class DocumentAIReaderService:
         if "mrz_code" in entity_types or "passport" in text_lower:
             return "passport"
 
+        # Check for BC ID Card (BCID: <string>)
+        if "bcid" in text_lower and ("bcid:" in text_lower or "bcid " in text_lower):
+            return "bcid"
+
         # Check for driver license indicators
         if "driver" in text_lower or "license" in text_lower or "dl" in text_lower:
             return "drivers_license"
@@ -396,6 +400,20 @@ class DocumentAIReaderService:
                     logger.info(f"[DOC_AI] Found driver's license number with pattern '{pattern}': {dl_number}")
                     return dl_number
         
+        # BC ID Card patterns (BCID: <string>)
+        if document_type in ("bcid", "unknown"):
+            bcid_patterns = [
+                r'BCID[:\s]+([A-Za-z0-9\-]+)',   # BCID: ABC123456 or BCID ABC123456
+                r'BCID[:\s]+([A-Za-z0-9\s\-]+?)(?:\s{2,}|\n|$)',  # BCID: value then space/newline
+            ]
+            for pattern in bcid_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    bcid_value = match.group(1).strip()
+                    if bcid_value:
+                        logger.info(f"[DOC_AI] Found BCID with pattern '{pattern}': {bcid_value}")
+                        return bcid_value
+
         # BC Services Card / Health Card patterns
         if document_type in ("bc_services", "health_card", "unknown"):
             # PHN is 10 digits, may have spaces: 9012 345 678

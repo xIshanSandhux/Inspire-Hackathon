@@ -17,11 +17,9 @@ function getDocumentDisplay(docType: string): { name: string; icon: string } {
   const typeLower = docType.toLowerCase();
   if (typeLower.includes("passport")) {
     return { name: "Passport", icon: "🛂" };
-  } else if (
-    typeLower.includes("bc_services") ||
-    typeLower.includes("bcid") ||
-    typeLower.includes("bc_id")
-  ) {
+  } else if (typeLower === "bcid") {
+    return { name: "BC ID Card", icon: "🪪" };
+  } else if (typeLower.includes("bc_services") || typeLower.includes("bc_id")) {
     return { name: "BC Services Card", icon: "🪪" };
   } else if (typeLower.includes("driver") || typeLower.includes("license")) {
     return { name: "Driver's License", icon: "🚗" };

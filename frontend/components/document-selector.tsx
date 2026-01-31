@@ -19,10 +19,12 @@ export function DocumentSelector({
   // Check for existing documents by backend type
   const hasPassport = !!documents.passport || !!documents.PASSPORT;
   const hasBCServices =
-    !!documents.bc_services || !!documents.BC_SERVICES || !!documents.BCID;
+    !!documents.bc_services || !!documents.BC_SERVICES;
+  const hasBCID = !!documents.bcid || !!documents.BCID;
   const hasDriversLicense =
     !!documents.drivers_license || !!documents.DRIVERS_LICENSE;
-  const isNewUser = !hasPassport && !hasBCServices && !hasDriversLicense;
+  const isNewUser =
+    !hasPassport && !hasBCServices && !hasBCID && !hasDriversLicense;
 
   // Get document by checking multiple possible keys
   const getDocument = (keys: string[]) => {
@@ -33,7 +35,8 @@ export function DocumentSelector({
   };
 
   const passportDoc = getDocument(["passport", "PASSPORT"]);
-  const bcServicesDoc = getDocument(["bc_services", "BC_SERVICES", "BCID"]);
+  const bcServicesDoc = getDocument(["bc_services", "BC_SERVICES"]);
+  const bcidDoc = getDocument(["bcid", "BCID"]);
   const driversLicenseDoc = getDocument(["drivers_license", "DRIVERS_LICENSE"]);
 
   return (
@@ -110,6 +113,24 @@ export function DocumentSelector({
                 </CardContent>
               </Card>
             )}
+            {bcidDoc && (
+              <Card className="bg-muted/50">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="text-green-500">✓</span> BC ID Card
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-2 text-xs text-muted-foreground">
+                  <p>BCID: {bcidDoc.id}</p>
+                  {bcidDoc.metadata.issuing_authority && (
+                    <p>
+                      Issued by:{" "}
+                      {String(bcidDoc.metadata.issuing_authority)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}
@@ -164,11 +185,25 @@ export function DocumentSelector({
               </p>
             </div>
           </Button>
+          <Button
+            variant="outline"
+            className="h-16 justify-start gap-3"
+            onClick={() => onSelect("BCID")}
+            disabled={hasBCID}
+          >
+            <span className="text-2xl">🪪</span>
+            <div className="text-left">
+              <p className="font-medium">BC ID Card</p>
+              <p className="text-xs text-muted-foreground">
+                {hasBCID ? "Already added" : "Add your BC ID Card (BCID)"}
+              </p>
+            </div>
+          </Button>
         </div>
       </div>
 
       {/* Show done if all documents added */}
-      {hasPassport && hasBCServices && hasDriversLicense && (
+      {hasPassport && hasBCServices && hasBCID && hasDriversLicense && (
         <p className="text-center text-sm text-muted-foreground">
           All documents have been added!
         </p>

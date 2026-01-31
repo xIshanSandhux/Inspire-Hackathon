@@ -11,6 +11,7 @@ class DocumentType(str, Enum):
     DRIVERS_LICENSE = "drivers_license"
     PASSPORT = "passport"
     BC_SERVICES = "bc_services"  # BC Services Card (health card)
+    BCID = "bcid"  # BC ID Card (ID format: BCID: <string>)
     HEALTH_CARD = "health_card"
     BIRTH_CERTIFICATE = "birth_certificate"
     SIN_CARD = "sin_card"
@@ -29,21 +30,23 @@ class ParsedDocument(BaseModel):
     unique_id: str | None = Field(
         None,
         description=(
-            "CRITICAL - MUST EXTRACT: The primary document identifier number. This is the MOST IMPORTANT field. "
+            "CRITICAL - MUST EXTRACT: The primary document identifier. This is the MOST IMPORTANT field. "
             "For driver's license: the license number (7-9 digits) found near 'DL', 'NDL', 'LDL' labels. "
             "Example: if you see 'NDL:01944956', extract '01944956'. "
             "For BC Services Card: the 10-digit PHN found near 'Personal Health Number'. "
             "Example: if you see '9012 345 678', extract '9012345678' (no spaces). "
+            "For BCID (BC ID Card): the string after 'BCID:' on the card. "
+            "Example: if you see 'BCID: ABC123456', extract 'ABC123456' (the value only, not the 'BCID:' prefix). "
             "For passport: the passport number (8-9 alphanumeric chars) found near 'Passport No' or in MRZ. "
-            "IMPORTANT: Extract ONLY the number/code, NOT the label."
+            "IMPORTANT: Extract ONLY the number/code/string, NOT the label."
         ),
     )
     document_type: DocumentType = Field(
         DocumentType.UNKNOWN,
         description=(
-            "The type of identity document: 'drivers_license' for any driver's license, "
-            "'bc_services' for BC Services Card/PHN card, 'passport' for passports, "
-            "'health_card' for other health cards, 'id_card' for generic IDs."
+            "The type of identity document: 'drivers_license' for driver's license, "
+            "'bc_services' for BC Services Card/PHN card, 'bcid' for BC ID Card, "
+            "'passport' for passports, 'health_card' for other health cards, 'id_card' for generic IDs."
         ),
     )
     first_name: str | None = Field(
