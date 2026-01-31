@@ -7,9 +7,13 @@ from typing import TYPE_CHECKING
 from fastapi import UploadFile
 
 from backend.core.services.document_reader import ExtractedDocument
+from backend.core.util import get_logger
 
 if TYPE_CHECKING:
     from backend.core.services.llm.document_parser import DocumentLLMParser
+    from backend.core.services.llm.schemas import ParsedDocument
+
+logger = get_logger(__name__)
 
 
 class OCRDocumentReaderService:
@@ -68,29 +72,41 @@ class OCRDocumentReaderService:
         Returns:
             ExtractedDocument with the extracted data.
         """
+        logger.info(f"[OCR] extract_from_image called - file: {image.filename}, content_type: {image.content_type}")
+        
         # Read image bytes
         image_bytes = await image.read()
         mime_type = image.content_type or "image/jpeg"
+        logger.info(f"[OCR] Image read - size: {len(image_bytes)} bytes, mime_type: {mime_type}")
         
         # If LLM parser is available, use vision to parse image directly
         if self.llm_parser:
+            logger.info(f"[OCR] LLM parser available, attempting vision-based parsing...")
             try:
                 # Try vision-based parsing first (sends image directly to LLM)
                 parsed = await self.llm_parser.parse_image_async(
                     image_bytes, mime_type, image.filename
                 )
-                return self._convert_parsed_to_extracted(parsed, "[vision]", image)
+                logger.info(f"[OCR] Vision parsing successful - document_type: {parsed.document_type}, unique_id: {parsed.unique_id}")
+                logger.debug(f"[OCR] Parsed fields: first_name={parsed.first_name}, last_name={parsed.last_name}, dob={parsed.date_of_birth}")
+                extracted = self._convert_parsed_to_extracted(parsed, "[vision]", image)
+                logger.info(f"[OCR] Converted to ExtractedDocument - document_id: {extracted.document_id}")
+                return extracted
             except Exception as e:
+                logger.error(f"[OCR] Vision parsing failed: {type(e).__name__}: {e}")
                 # Fallback: try OCR + text parsing
                 try:
                     raw_text = self._extract_raw_text(image_bytes)
+                    logger.info(f"[OCR] Fallback OCR text: {raw_text[:100]}...")
                     if not raw_text.startswith("[OCR STUB]"):
                         parsed = await self.llm_parser.parse_async(raw_text, image.filename)
+                        logger.info(f"[OCR] Text parsing successful - unique_id: {parsed.unique_id}")
                         return self._convert_parsed_to_extracted(parsed, raw_text, image)
-                except Exception:
-                    pass  # Fall through to error response
+                except Exception as e2:
+                    logger.error(f"[OCR] Fallback text parsing also failed: {type(e2).__name__}: {e2}")
                 
                 # Return error response
+                logger.warning(f"[OCR] Returning PARSE_ERROR result")
                 return ExtractedDocument(
                     document_type="unknown",
                     document_id="PARSE_ERROR",
@@ -105,6 +121,7 @@ class OCRDocumentReaderService:
                 )
         
         # No LLM parser - try OCR only
+        logger.warning(f"[OCR] No LLM parser available, returning raw OCR result")
         raw_text = self._extract_raw_text(image_bytes)
         return ExtractedDocument(
             document_type="unknown",
@@ -137,6 +154,13 @@ class OCRDocumentReaderService:
         Returns:
             ExtractedDocument with structured data.
         """
+        logger.info(f"[OCR] Converting ParsedDocument to ExtractedDocument")
+        logger.info(f"[OCR] ParsedDocument values:")
+        logger.info(f"  - document_type: {parsed.document_type}")
+        logger.info(f"  - unique_id: {parsed.unique_id}")
+        logger.info(f"  - first_name: {parsed.first_name}")
+        logger.info(f"  - last_name: {parsed.last_name}")
+        
         # Build metadata from parsed fields
         metadata: dict = {
             "service": "ocr",
@@ -165,9 +189,14 @@ class OCRDocumentReaderService:
         # Merge additional metadata
         metadata.update(parsed.additional_metadata)
         
+        document_id = parsed.unique_id or "UNKNOWN"
+        confidence = 0.8 if parsed.unique_id else 0.5
+        
+        logger.info(f"[OCR] Final document_id: {document_id}, confidence: {confidence}")
+        
         return ExtractedDocument(
             document_type=parsed.document_type.value,
-            document_id=parsed.unique_id or "UNKNOWN",
+            document_id=document_id,
             metadata=metadata,
-            confidence=0.8 if parsed.unique_id else 0.5,  # Heuristic confidence
+            confidence=confidence,
         )

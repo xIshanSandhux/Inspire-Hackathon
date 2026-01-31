@@ -3,8 +3,11 @@
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from backend.core.auth import RequiredUser
+from backend.core.util import get_logger
 from backend.features.document.schemas import AddDocumentResponse
 from backend.features.document.service import DocumentServiceDep
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -25,23 +28,38 @@ async def add_document(
 
     Requires authentication.
     """
+    logger.info(f"[ROUTER] add_document called - fingerprint: {fingerprint_hash[:8]}..., file: {image.filename}, content_type: {image.content_type}")
+    
     result = await service.add_from_image(
         fingerprint_hash=fingerprint_hash,
         image=image,
     )
 
     if not result:
+        logger.warning(f"[ROUTER] Identity not found for fingerprint: {fingerprint_hash[:8]}...")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Identity not found. Create identity first with /identity/create",
         )
 
     document, extracted = result
+    
+    logger.info(f"[ROUTER] Document processed successfully:")
+    logger.info(f"  - document.document_type: {document.document_type}")
+    logger.info(f"  - document.document_id: {document.document_id}")
+    logger.info(f"  - extracted.document_type: {extracted.document_type}")
+    logger.info(f"  - extracted.document_id: {extracted.document_id}")
+    logger.info(f"  - extracted.confidence: {extracted.confidence}")
+    logger.debug(f"  - extracted.metadata: {extracted.metadata}")
 
-    return AddDocumentResponse(
+    response = AddDocumentResponse(
         fingerprint_hash=fingerprint_hash,
         document_type=document.document_type,
         id=document.document_id,
         metadata=document.doc_metadata or {},
         confidence=extracted.confidence,
     )
+    
+    logger.info(f"[ROUTER] Returning response - id: {response.id}, type: {response.document_type}")
+    
+    return response

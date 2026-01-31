@@ -7,6 +7,9 @@ from fastapi import Depends, Header, HTTPException, status
 from backend.core.auth.providers.clerk import ClerkAuthProvider
 from backend.core.auth.schemas import AuthenticatedUser
 from backend.core.config import settings
+from backend.core.util import get_logger
+
+logger = get_logger(__name__)
 
 # Singleton provider instance (lazily initialized)
 _auth_provider: ClerkAuthProvider | None = None
@@ -58,24 +61,47 @@ async def get_current_user(
     This is an optional auth dependency - returns None if no token
     is provided or if Clerk is not configured.
 
+    Supports both:
+    - Clerk JWT tokens (validated via JWKS)
+    - Static API keys (configured via API_KEYS env var)
+
     Args:
         authorization: The Authorization header value.
 
     Returns:
         AuthenticatedUser if valid token, None otherwise.
     """
+    # No authorization header provided
+    if not authorization or not authorization.startswith("Bearer "):
+        logger.debug(f"[AUTH] No bearer token in authorization header")
+        return None
+
+    # Extract the token
+    token = authorization.replace("Bearer ", "")
+    
+    # Debug: show what we're checking
+    logger.info(f"[AUTH] Token received: {token[:20]}...")
+    logger.info(f"[AUTH] API keys configured: {settings.api_keys_list}")
+    logger.info(f"[AUTH] Token in api_keys_list: {token in settings.api_keys_list}")
+
+    # Check if it's a static API key first
+    if token in settings.api_keys_list:
+        logger.info(f"[AUTH] API key matched! Returning service user")
+        # Return a service user for API key auth
+        return AuthenticatedUser(
+            user_id="service",
+            session_id=None,
+            claims={"type": "api_key"},
+        )
+
+    # Try Clerk JWT validation
     provider = get_auth_provider()
 
     # If Clerk is not configured, allow unauthenticated access
     if provider is None:
         return None
 
-    # No authorization header provided
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-
-    # Extract and validate the token
-    token = authorization.replace("Bearer ", "")
+    # Validate as JWT
     user_info = await provider.validate_token(token)
 
     if user_info:

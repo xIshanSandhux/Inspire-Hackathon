@@ -15,6 +15,8 @@ To run these tests:
 """
 
 import os
+import sys
+import warnings
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +24,9 @@ from fastapi.testclient import TestClient
 
 def has_document_ai_config() -> bool:
     """Check if Document AI is configured."""
-    return bool(os.environ.get("GCP_PROJECT_ID") and os.environ.get("DOCUMENT_AI_PROCESSOR_ID"))
+    gcp_project = os.environ.get("GCP_PROJECT_ID")
+    processor_id = os.environ.get("DOCUMENT_AI_PROCESSOR_ID")
+    return bool(gcp_project and processor_id)
 
 
 def has_llm_config() -> bool:
@@ -30,10 +34,50 @@ def has_llm_config() -> bool:
     return bool(os.environ.get("OPENROUTER_API_KEY"))
 
 
+def get_config_summary() -> str:
+    """Build configuration summary."""
+    lines = [
+        "",
+        "=" * 60,
+        "E2E Document Parsing Test Configuration:",
+        "=" * 60,
+        f"  GCP_PROJECT_ID: {os.environ.get('GCP_PROJECT_ID', '(not set)')}",
+        f"  DOCUMENT_AI_PROCESSOR_ID: {os.environ.get('DOCUMENT_AI_PROCESSOR_ID', '(not set)')}",
+        f"  DOCUMENT_READER_SERVICE: {os.environ.get('DOCUMENT_READER_SERVICE', 'ocr (default)')}",
+        f"  OPENROUTER_API_KEY: {'set (' + os.environ.get('OPENROUTER_API_KEY', '')[:15] + '...)' if os.environ.get('OPENROUTER_API_KEY') else '(not set)'}",
+        f"  Document AI configured: {has_document_ai_config()}",
+        f"  LLM configured: {has_llm_config()}",
+        f"  Tests will run: {has_document_ai_config() or has_llm_config()}",
+        "=" * 60,
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def get_skip_reason() -> str:
+    """Build detailed skip reason showing what's missing."""
+    lines = ["Document parsing not configured."]
+    lines.append(get_config_summary())
+    lines.append("Set either Document AI OR OpenRouter credentials to run these tests.")
+    return "\n".join(lines)
+
+
+# Log configuration status at import time (write to stderr to avoid pytest capture)
+sys.stderr.write(get_config_summary())
+sys.stderr.flush()
+
+# Also emit as a warning so it shows in pytest output
+if not has_document_ai_config() and not has_llm_config():
+    warnings.warn(
+        f"Skipping E2E document parsing tests - no parsing backend configured.\n{get_config_summary()}",
+        UserWarning,
+    )
+
+
 # Skip all tests in this module if neither Document AI nor LLM is configured
 pytestmark = pytest.mark.skipif(
     not has_document_ai_config() and not has_llm_config(),
-    reason="Requires either Document AI (GCP_PROJECT_ID + DOCUMENT_AI_PROCESSOR_ID) or OpenRouter (OPENROUTER_API_KEY)",
+    reason=get_skip_reason(),
 )
 
 
@@ -61,8 +105,16 @@ class TestDocumentParsing:
             files={"image": ("drivers_license.jpg", drivers_license_image, "image/jpeg")},
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 200, f"Upload failed: {response.text}"
         data = response.json()
+
+        # Debug output - print full response
+        print("\n" + "=" * 60)
+        print("DOCUMENT UPLOAD RESPONSE:")
+        print("=" * 60)
+        import json
+        print(json.dumps(data, indent=2))
+        print("=" * 60 + "\n")
 
         # Basic structure assertions
         assert data["fingerprint_hash"] == sample_fingerprint
@@ -72,7 +124,7 @@ class TestDocumentParsing:
         assert "confidence" in data
 
         # Document type should be detected as drivers_license
-        assert data["document_type"] == "drivers_license"
+        assert data["document_type"] == "drivers_license", f"Expected 'drivers_license' but got '{data['document_type']}'. Full metadata: {data['metadata']}"
 
         # Assertions for extracted data (fill in expected values based on test image)
         # assert data["metadata"]["first_name"] == ""

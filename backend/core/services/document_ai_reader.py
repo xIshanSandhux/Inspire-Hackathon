@@ -5,6 +5,9 @@ from typing import Any
 from fastapi import UploadFile
 
 from backend.core.services.document_reader import ExtractedDocument
+from backend.core.util import get_logger
+
+logger = get_logger(__name__)
 
 
 class DocumentAIReaderService:
@@ -77,14 +80,18 @@ class DocumentAIReaderService:
         """
         from google.cloud import documentai_v1 as documentai
 
+        logger.info(f"[DOC_AI] extract_from_image called - file: {image.filename}, content_type: {image.content_type}")
+
         # Read image bytes
         image_bytes = await image.read()
+        logger.info(f"[DOC_AI] Image read - size: {len(image_bytes)} bytes")
 
         # Determine MIME type
         mime_type = image.content_type or "image/jpeg"
 
         try:
             client = self._get_client()
+            logger.info(f"[DOC_AI] Client obtained, processor: {self._get_processor_name()}")
 
             # Create the raw document
             raw_document = documentai.RawDocument(
@@ -98,13 +105,24 @@ class DocumentAIReaderService:
                 raw_document=raw_document,
             )
 
+            logger.info(f"[DOC_AI] Sending request to Document AI...")
             result = client.process_document(request=request)
             document = result.document
+            
+            # Log raw extracted text
+            raw_text = document.text if document.text else ""
+            logger.info(f"[DOC_AI] Response received - text length: {len(raw_text)}, entities: {len(document.entities)}")
+            logger.info(f"[DOC_AI] ========== RAW EXTRACTED TEXT START ==========")
+            logger.info(f"[DOC_AI] {raw_text}")
+            logger.info(f"[DOC_AI] ========== RAW EXTRACTED TEXT END ==========")
 
             # Parse the extracted entities
-            return self._parse_document_entities(document)
+            extracted = self._parse_document_entities(document)
+            logger.info(f"[DOC_AI] Parsed result - type: {extracted.document_type}, id: {extracted.document_id}, confidence: {extracted.confidence}")
+            return extracted
 
         except Exception as e:
+            logger.error(f"[DOC_AI] ERROR during extraction: {type(e).__name__}: {e}")
             # Return error result on failure
             return ExtractedDocument(
                 document_type="unknown",
@@ -135,6 +153,21 @@ class DocumentAIReaderService:
         total_confidence = 0.0
         confidence_count = 0
 
+        logger.info(f"[DOC_AI] Parsing {len(entities)} entities from Document AI response")
+        
+        # Log all entities for debugging
+        logger.info(f"[DOC_AI] ========== ALL ENTITIES START ==========")
+        for i, entity in enumerate(entities):
+            entity_type = entity.type_
+            mention_text = entity.mention_text if entity.mention_text else "(empty)"
+            confidence = entity.confidence
+            # Skip portrait binary data
+            if entity_type != "portrait":
+                logger.info(f"[DOC_AI] Entity[{i}]: type='{entity_type}', value='{mention_text}', confidence={confidence:.3f}")
+            else:
+                logger.info(f"[DOC_AI] Entity[{i}]: type='portrait', value='(binary data)', confidence={confidence:.3f}")
+        logger.info(f"[DOC_AI] ========== ALL ENTITIES END ==========")
+
         # Map of Document AI entity types to our metadata fields
         entity_mapping = {
             "document_id": "document_id",
@@ -153,6 +186,8 @@ class DocumentAIReaderService:
             entity_type = entity.type_
             mention_text = entity.mention_text
             confidence = entity.confidence
+            
+            logger.debug(f"[DOC_AI] Entity: type={entity_type}, text={mention_text[:50] if mention_text else 'None'}..., confidence={confidence}")
 
             # Track confidence for averaging
             if confidence > 0:
@@ -162,6 +197,7 @@ class DocumentAIReaderService:
             # Extract document ID
             if entity_type == "document_id":
                 document_id = mention_text
+                logger.info(f"[DOC_AI] Found document_id entity: {document_id}")
 
             # Map entity to metadata
             if entity_type in entity_mapping:
@@ -177,12 +213,17 @@ class DocumentAIReaderService:
 
         # Detect document type from entities or text
         document_type = self._detect_document_type(document, entities)
+        logger.info(f"[DOC_AI] Detected document_type: {document_type}")
 
         # Calculate average confidence
         avg_confidence = total_confidence / confidence_count if confidence_count > 0 else 0.0
 
-        # Add service info
+        # Add service info and raw text for debugging
         metadata["service"] = "document_ai"
+        metadata["raw_text"] = document.text if document.text else ""
+        
+        logger.info(f"[DOC_AI] Final parsed values - document_id: {document_id}, document_type: {document_type}, confidence: {avg_confidence}")
+        logger.debug(f"[DOC_AI] Metadata keys: {list(metadata.keys())}")
 
         return ExtractedDocument(
             document_type=document_type,

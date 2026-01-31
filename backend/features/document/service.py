@@ -11,8 +11,11 @@ from backend.core.services.document_reader import (
     ExtractedDocument,
     get_document_reader_service,
 )
+from backend.core.util import get_logger
 from backend.features.document.models import Document
 from backend.features.identity.service import IdentityService, get_identity_service
+
+logger = get_logger(__name__)
 
 
 class DocumentService:
@@ -39,20 +42,35 @@ class DocumentService:
         Extracts document data from the image and stores it.
         Returns None if identity not found.
         """
+        logger.info(f"[SERVICE] add_from_image called - fingerprint: {fingerprint_hash[:8]}...")
+        
         identity = self.identity_service.get_by_fingerprint(fingerprint_hash)
         if not identity:
+            logger.warning(f"[SERVICE] Identity not found for fingerprint: {fingerprint_hash[:8]}...")
             return None
+        
+        logger.info(f"[SERVICE] Identity found - id: {identity.id}")
 
         # Extract document data from image (validation is implicit)
+        logger.info(f"[SERVICE] Calling document_reader.extract_from_image...")
         extracted = await self.document_reader.extract_from_image(image)
+        
+        logger.info(f"[SERVICE] Extraction result:")
+        logger.info(f"  - extracted.document_type: {extracted.document_type}")
+        logger.info(f"  - extracted.document_id: {extracted.document_id}")
+        logger.info(f"  - extracted.confidence: {extracted.confidence}")
+        logger.debug(f"  - extracted.metadata keys: {list(extracted.metadata.keys())}")
 
         # Store the document
+        logger.info(f"[SERVICE] Upserting document...")
         document = self._upsert_document(
             identity_id=identity.id,
             document_type=extracted.document_type,
             document_id=extracted.document_id,
             metadata=extracted.metadata,
         )
+        
+        logger.info(f"[SERVICE] Document upserted - db_id: {document.id}, document_id: {document.document_id}")
 
         return document, extracted
 

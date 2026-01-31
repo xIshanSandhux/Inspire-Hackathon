@@ -4,6 +4,9 @@ import base64
 
 from backend.core.services.llm.client import OpenRouterClient
 from backend.core.services.llm.schemas import ParsedDocument
+from backend.core.util import get_logger
+
+logger = get_logger(__name__)
 
 
 DOCUMENT_EXTRACTION_PROMPT = """You are an expert at extracting structured data from identity documents.
@@ -133,10 +136,14 @@ class DocumentLLMParser:
         Returns:
             ParsedDocument with extracted structured data.
         """
+        logger.info(f"[LLM_PARSER] parse_image called - size: {len(image_bytes)} bytes, mime_type: {mime_type}, filename: {filename}")
+        logger.info(f"[LLM_PARSER] Using model: {self.client.model}")
+        
         instructor_client = self.client.get_instructor_client()
 
         # Encode image as base64 for the API
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        logger.debug(f"[LLM_PARSER] Image encoded to base64 - length: {len(image_b64)}")
 
         # Build user message with image
         user_content = [
@@ -152,7 +159,8 @@ class DocumentLLMParser:
             },
         ]
 
-        return instructor_client.chat.completions.create(
+        logger.info(f"[LLM_PARSER] Sending request to LLM...")
+        result = instructor_client.chat.completions.create(
             model=self.client.model,
             response_model=ParsedDocument,
             messages=[
@@ -160,6 +168,17 @@ class DocumentLLMParser:
                 {"role": "user", "content": user_content},
             ],
         )
+        
+        logger.info(f"[LLM_PARSER] LLM response received:")
+        logger.info(f"  - document_type: {result.document_type}")
+        logger.info(f"  - unique_id: {result.unique_id}")
+        logger.info(f"  - first_name: {result.first_name}")
+        logger.info(f"  - last_name: {result.last_name}")
+        logger.info(f"  - date_of_birth: {result.date_of_birth}")
+        logger.info(f"  - confidence_notes: {result.confidence_notes}")
+        logger.debug(f"  - additional_metadata: {result.additional_metadata}")
+        
+        return result
 
     async def parse_image_async(
         self, image_bytes: bytes, mime_type: str = "image/jpeg", filename: str | None = None

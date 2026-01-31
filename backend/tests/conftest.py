@@ -6,9 +6,23 @@ from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
+# Load .env file FIRST before any other config
+# Try multiple locations since tests may run from different directories
+env_paths = [
+    Path(__file__).parent.parent / ".env",  # backend/.env
+    Path(__file__).parent.parent.parent / ".env",  # project root/.env
+    Path(".env"),  # current directory
+]
+for env_path in env_paths:
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"Loaded env from: {env_path}")
+        break
 
 # Generate a valid Fernet key for testing
 TEST_ENCRYPTION_KEY = Fernet.generate_key().decode()
@@ -117,25 +131,29 @@ def sample_image_bytes() -> bytes:
 @pytest.fixture
 def drivers_license_image() -> bytes:
     """Load driver's license test image from resources."""
-    image_path = RESOURCES_DIR / "drivers_license.jpg"
-    if not image_path.exists():
-        pytest.skip(f"Test image not found: {image_path}")
-    return image_path.read_bytes()
+    # Try both naming conventions
+    for filename in ["drivers_license.jpg", "drivers-license.jpg", "drivers_license.png", "drivers-license.png"]:
+        image_path = RESOURCES_DIR / filename
+        if image_path.exists():
+            return image_path.read_bytes()
+    pytest.skip(f"Test image not found in {RESOURCES_DIR} (tried drivers_license.jpg, drivers-license.jpg)")
 
 
 @pytest.fixture
 def passport_image() -> bytes:
     """Load passport test image from resources."""
-    image_path = RESOURCES_DIR / "passport.jpg"
-    if not image_path.exists():
-        pytest.skip(f"Test image not found: {image_path}")
-    return image_path.read_bytes()
+    for filename in ["passport.jpg", "passport.png"]:
+        image_path = RESOURCES_DIR / filename
+        if image_path.exists():
+            return image_path.read_bytes()
+    pytest.skip(f"Test image not found in {RESOURCES_DIR} (tried passport.jpg, passport.png)")
 
 
 @pytest.fixture
 def health_card_image() -> bytes:
     """Load health card test image from resources."""
-    image_path = RESOURCES_DIR / "health_card.jpg"
-    if not image_path.exists():
-        pytest.skip(f"Test image not found: {image_path}")
-    return image_path.read_bytes()
+    for filename in ["health_card.jpg", "health-card.jpg", "health_card.png", "health-card.png"]:
+        image_path = RESOURCES_DIR / filename
+        if image_path.exists():
+            return image_path.read_bytes()
+    pytest.skip(f"Test image not found in {RESOURCES_DIR} (tried health_card.jpg, health-card.jpg)")
