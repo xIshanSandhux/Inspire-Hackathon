@@ -122,8 +122,16 @@ async def get_current_user(
     # Try Clerk JWT validation
     provider = get_auth_provider()
 
-    # If Clerk is not configured, allow unauthenticated access
+    # If Clerk is not configured (e.g. missing CLERK_PUBLISHABLE_KEY), we can't validate JWTs
     if provider is None:
+        # In debug mode, accept any Bearer token as a dev user so local dev works without full Clerk setup
+        if settings.debug:
+            logger.debug("[AUTH] Clerk not configured; debug mode: accepting token as dev user")
+            return AuthenticatedUser(
+                user_id="dev",
+                session_id=None,
+                claims={"type": "dev", "sub": "dev"},
+            )
         logger.debug("[AUTH] Clerk not configured, returning None")
         return None
 
