@@ -17,6 +17,12 @@ TEST_ENCRYPTION_KEY = Fernet.generate_key().decode()
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 os.environ["ENCRYPTION_KEY"] = TEST_ENCRYPTION_KEY
 
+# Use Document AI reader for E2E tests (requires GCP credentials)
+# Set DOCUMENT_READER_SERVICE=document_ai to use Google Document AI
+# Otherwise falls back to OCR + LLM vision
+if os.environ.get("GCP_PROJECT_ID") and os.environ.get("DOCUMENT_AI_PROCESSOR_ID"):
+    os.environ.setdefault("DOCUMENT_READER_SERVICE", "document_ai")
+
 from backend.core.auth.dependencies import require_auth
 from backend.core.auth.schemas import AuthenticatedUser
 from backend.core.db import Base, get_db

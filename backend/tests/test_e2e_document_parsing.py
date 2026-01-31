@@ -1,12 +1,16 @@
-"""E2E tests for document upload with LLM parsing.
+"""E2E tests for document upload with document parsing.
 
 These tests verify the full document upload flow including:
 - Identity creation
 - Document image upload
-- LLM-based document parsing (when OPENROUTER_API_KEY is set)
+- Document parsing (via Document AI or LLM vision)
 - Structured data extraction verification
 
-To run these tests with LLM parsing:
+To run these tests:
+    # With Google Document AI:
+    GCP_PROJECT_ID=xxx DOCUMENT_AI_PROCESSOR_ID=xxx pytest backend/tests/test_e2e_document_parsing.py -v
+    
+    # With OpenRouter LLM vision:
     OPENROUTER_API_KEY=sk-or-v1-xxx pytest backend/tests/test_e2e_document_parsing.py -v
 """
 
@@ -16,10 +20,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-# Skip all tests in this module if OPENROUTER_API_KEY is not set
+def has_document_ai_config() -> bool:
+    """Check if Document AI is configured."""
+    return bool(os.environ.get("GCP_PROJECT_ID") and os.environ.get("DOCUMENT_AI_PROCESSOR_ID"))
+
+
+def has_llm_config() -> bool:
+    """Check if LLM (OpenRouter) is configured."""
+    return bool(os.environ.get("OPENROUTER_API_KEY"))
+
+
+# Skip all tests in this module if neither Document AI nor LLM is configured
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("OPENROUTER_API_KEY"),
-    reason="Requires OPENROUTER_API_KEY for LLM parsing",
+    not has_document_ai_config() and not has_llm_config(),
+    reason="Requires either Document AI (GCP_PROJECT_ID + DOCUMENT_AI_PROCESSOR_ID) or OpenRouter (OPENROUTER_API_KEY)",
 )
 
 
@@ -59,9 +73,6 @@ class TestDocumentParsing:
 
         # Document type should be detected as drivers_license
         assert data["document_type"] == "drivers_license"
-
-        # LLM parsing should have been used
-        assert data["metadata"].get("llm_parsing") is True
 
         # Assertions for extracted data (fill in expected values based on test image)
         # assert data["metadata"]["first_name"] == ""
