@@ -133,7 +133,7 @@ class DocumentAIReaderService:
             logger.info(f"[DOC_AI] ========== RAW EXTRACTED TEXT END ==========")
 
             # Parse the extracted entities
-            extracted = self._parse_document_entities(document)
+            extracted = await self._parse_document_entities(document)
             logger.info(f"[DOC_AI] Parsed result - type: {extracted.document_type}, id: {extracted.document_id}, confidence: {extracted.confidence}")
             return extracted
 
@@ -151,7 +151,7 @@ class DocumentAIReaderService:
                 confidence=0.0,
             )
 
-    def _parse_document_entities(self, document) -> ExtractedDocument:
+    async def _parse_document_entities(self, document) -> ExtractedDocument:
         """
         Parse Document AI response entities into ExtractedDocument.
         
@@ -231,42 +231,35 @@ class DocumentAIReaderService:
         document_type = getattr(self, '_document_type_hint', None) or self._detect_document_type(document, entities)
         logger.info(f"[DOC_AI] Detected document_type: {document_type}")
 
-        # If no document_id found in entities, try fallback extraction
+        # If no document_id found in entities, try LLM first (smarter), then regex fallback
         if document_id == "UNKNOWN" and document.text:
-            logger.info(f"[DOC_AI] No document_id entity found, attempting fallback extraction...")
+            logger.info(f"[DOC_AI] No document_id entity found, attempting LLM extraction first...")
             
-            # First try regex patterns
-            fallback_id = self._extract_id_from_text(document.text, document_type)
-            if fallback_id:
-                document_id = fallback_id
-                metadata["id_extraction_method"] = "fallback_regex"
-                logger.info(f"[DOC_AI] Regex fallback extraction successful: {document_id}")
-            
-            # If regex fails and LLM is available, try LLM extraction
-            elif self.llm_parser:
-                logger.info(f"[DOC_AI] ========== LLM FALLBACK STARTING ==========")
+            # First try LLM extraction (smarter, extracts more fields)
+            if self.llm_parser:
+                logger.info(f"[DOC_AI] ========== LLM EXTRACTION STARTING ==========")
                 logger.info(f"[DOC_AI] self.llm_parser is set: {self.llm_parser is not None}")
                 logger.info(f"[DOC_AI] document.text length: {len(document.text)}")
                 logger.info(f"[DOC_AI] document_type for LLM: {document_type}")
                 try:
-                    import asyncio
                     # Use the raw text to get LLM to extract structured data
                     logger.info(f"[DOC_AI] Calling llm_parser.parse_async()...")
-                    parsed = asyncio.get_event_loop().run_until_complete(
-                        self.llm_parser.parse_async(document.text, None, document_type)
-                    )
+                    parsed = await self.llm_parser.parse_async(document.text, None, document_type)
                     logger.info(f"[DOC_AI] LLM parse completed!")
                     logger.info(f"[DOC_AI] LLM returned unique_id: {parsed.unique_id}")
                     logger.info(f"[DOC_AI] LLM returned document_type: {parsed.document_type}")
                     logger.info(f"[DOC_AI] LLM returned first_name: {parsed.first_name}")
                     logger.info(f"[DOC_AI] LLM returned last_name: {parsed.last_name}")
+                    logger.info(f"[DOC_AI] LLM returned date_of_birth: {parsed.date_of_birth}")
+                    logger.info(f"[DOC_AI] LLM returned expiry_date: {parsed.expiry_date}")
+                    logger.info(f"[DOC_AI] LLM returned address: {parsed.address}")
                     
                     if parsed.unique_id:
                         document_id = parsed.unique_id
-                        metadata["id_extraction_method"] = "fallback_llm"
-                        logger.info(f"[DOC_AI] LLM fallback extraction successful: {document_id}")
+                        metadata["id_extraction_method"] = "llm"
+                        logger.info(f"[DOC_AI] LLM extraction successful: {document_id}")
                         
-                        # Also grab other fields from LLM if we didn't get them
+                        # Grab all fields from LLM if we didn't get them from Document AI
                         if not metadata.get("first_name") and parsed.first_name:
                             metadata["first_name"] = parsed.first_name
                         if not metadata.get("last_name") and parsed.last_name:
@@ -277,25 +270,39 @@ class DocumentAIReaderService:
                             metadata["expiry_date"] = parsed.expiry_date
                         if not metadata.get("address") and parsed.address:
                             metadata["address"] = parsed.address
+                        if not metadata.get("sex") and parsed.sex:
+                            metadata["sex"] = parsed.sex
+                        if not metadata.get("issuing_authority") and parsed.issuing_authority:
+                            metadata["issuing_authority"] = parsed.issuing_authority
                     else:
-                        logger.warning(f"[DOC_AI] LLM fallback returned but unique_id was None/empty")
+                        logger.warning(f"[DOC_AI] LLM returned but unique_id was None/empty")
                 except Exception as e:
-                    logger.error(f"[DOC_AI] LLM fallback EXCEPTION: {type(e).__name__}: {e}")
+                    logger.error(f"[DOC_AI] LLM extraction EXCEPTION: {type(e).__name__}: {e}")
                     import traceback
                     logger.error(f"[DOC_AI] Traceback: {traceback.format_exc()}")
-                logger.info(f"[DOC_AI] ========== LLM FALLBACK ENDED ==========")
+                logger.info(f"[DOC_AI] ========== LLM EXTRACTION ENDED ==========")
             else:
-                logger.warning(f"[DOC_AI] self.llm_parser is None - LLM fallback not available")
-                logger.warning(f"[DOC_AI] All fallback methods failed - no ID found")
+                logger.warning(f"[DOC_AI] self.llm_parser is None - LLM extraction not available")
+            
+            # If LLM failed or not available, fall back to regex
+            if document_id == "UNKNOWN":
+                logger.info(f"[DOC_AI] LLM didn't extract ID, trying regex fallback...")
+                fallback_id = self._extract_id_from_text(document.text, document_type)
+                if fallback_id:
+                    document_id = fallback_id
+                    metadata["id_extraction_method"] = "fallback_regex"
+                    logger.info(f"[DOC_AI] Regex fallback extraction successful: {document_id}")
+                else:
+                    logger.warning(f"[DOC_AI] All extraction methods failed - no ID found")
 
         # Calculate average confidence
         avg_confidence = total_confidence / confidence_count if confidence_count > 0 else 0.0
         
         # Adjust confidence based on extraction method
-        if metadata.get("id_extraction_method") == "fallback_regex":
+        if metadata.get("id_extraction_method") == "llm":
+            avg_confidence = max(avg_confidence, 0.9)  # High confidence for LLM extraction
+        elif metadata.get("id_extraction_method") == "fallback_regex":
             avg_confidence = max(avg_confidence, 0.7)  # Decent confidence for regex match
-        elif metadata.get("id_extraction_method") == "fallback_llm":
-            avg_confidence = max(avg_confidence, 0.85)  # Higher confidence for LLM extraction
 
         # Add service info and raw text for debugging
         metadata["service"] = "document_ai"
