@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiUrl, getHeaders, getHeadersWithClerkToken } from "./config";
 
 // Set to true to use mock responses, false to use real API
 const USE_MOCK = false;
@@ -54,14 +53,6 @@ interface AddDocumentResponse {
   confidence: number;
 }
 
-// Get M2M token from localStorage
-const getM2MToken = () => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("service_token") || "";
-  }
-  return "";
-};
-
 // Mock data storage (persists during session)
 let mockDocuments: Documents = {};
 
@@ -82,12 +73,9 @@ export const useCreateIdentity = () => {
         };
       }
 
-      const response = await fetch(`${API_BASE_URL}/identity/create`, {
+      const response = await fetch(apiUrl("/identity/create"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getM2MToken()}`,
-        },
+        headers: getHeaders("application/json"),
         body: JSON.stringify({ fingerprint_hash: fingerprintHash }),
       });
 
@@ -156,12 +144,9 @@ export const useUploadDocument = () => {
         formData.append("document_type", backendDocType);
       }
 
-      const response = await fetch(`${API_BASE_URL}/document/add-document`, {
+      const response = await fetch(apiUrl("/document/add-document"), {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${getM2MToken()}`,
-          // Note: Don't set Content-Type for FormData, browser sets it with boundary
-        },
+        headers: getHeaders(),
         body: formData,
       });
 
@@ -183,7 +168,13 @@ interface UserInfoResponse {
 
 export const useUserInfo = () => {
   return useMutation({
-    mutationFn: async (fingerprintHash: string): Promise<UserInfoResponse> => {
+    mutationFn: async ({
+      fingerprintHash,
+      clerkToken,
+    }: {
+      fingerprintHash: string;
+      clerkToken?: string;
+    }): Promise<UserInfoResponse> => {
       if (USE_MOCK) {
         await mockDelay(1500);
 
@@ -194,12 +185,14 @@ export const useUserInfo = () => {
         };
       }
 
-      const response = await fetch(`${API_BASE_URL}/identity/retrieve`, {
+      // Use Clerk token if provided, otherwise fall back to default headers (M2M token)
+      const headers = clerkToken
+        ? getHeadersWithClerkToken(clerkToken, "application/json")
+        : getHeaders("application/json");
+
+      const response = await fetch(apiUrl("/identity/retrieve"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getM2MToken()}`,
-        },
+        headers,
         body: JSON.stringify({ fingerprint_hash: fingerprintHash }),
       });
 
@@ -223,11 +216,9 @@ export const resetMockData = () => {
 
 export type {
   AddDocumentResponse,
-  BackendDocumentType,
   CreateIdentityResponse,
   Document,
   Documents,
-  FrontendDocumentType,
   RetrieveIdentityResponse,
   UserInfoResponse,
 };
