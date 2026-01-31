@@ -1,0 +1,163 @@
+"""OCR-based document reader service implementation."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from fastapi import UploadFile
+
+from backend.core.services.document_reader import ExtractedDocument
+
+if TYPE_CHECKING:
+    from backend.core.services.llm.document_parser import DocumentLLMParser
+
+
+class OCRDocumentReaderService:
+    """
+    Document reader service using OCR (Optical Character Recognition).
+    
+    This reader extracts raw text from images and optionally uses an LLM
+    parser to extract structured data from the text.
+    
+    TODO: Implement actual OCR logic using a library like pytesseract,
+    EasyOCR, or a cloud OCR service. Currently uses stub text extraction.
+    """
+
+    def __init__(self, llm_parser: DocumentLLMParser | None = None):
+        """
+        Initialize OCR service.
+        
+        Args:
+            llm_parser: Optional LLM parser for structured data extraction.
+                        If not provided, returns raw text in metadata.
+        """
+        self.llm_parser = llm_parser
+
+    def _extract_raw_text(self, image_bytes: bytes) -> str:
+        """
+        Extract raw text from image bytes using OCR.
+        
+        TODO: Implement actual OCR using pytesseract, EasyOCR, etc.
+        Currently returns placeholder text for testing.
+        
+        Args:
+            image_bytes: Raw image data.
+            
+        Returns:
+            Extracted text string.
+        """
+        # STUB: Return placeholder text
+        # In production, use:
+        # import pytesseract
+        # from PIL import Image
+        # import io
+        # image = Image.open(io.BytesIO(image_bytes))
+        # return pytesseract.image_to_string(image)
+        return "[OCR STUB] No text extracted - implement OCR library"
+
+    async def extract_from_image(self, image: UploadFile) -> ExtractedDocument:
+        """
+        Extract document data from an uploaded image using OCR.
+
+        If an LLM parser is configured, the raw OCR text is parsed into
+        structured document data. Otherwise, returns the raw text.
+
+        Args:
+            image: The uploaded document image file.
+
+        Returns:
+            ExtractedDocument with the extracted data.
+        """
+        # Read image bytes
+        image_bytes = await image.read()
+        
+        # Extract raw text via OCR
+        raw_text = self._extract_raw_text(image_bytes)
+        
+        # If LLM parser is available, use it for structured extraction
+        if self.llm_parser:
+            try:
+                parsed = await self.llm_parser.parse_async(raw_text, image.filename)
+                return self._convert_parsed_to_extracted(parsed, raw_text, image)
+            except Exception as e:
+                # Fallback to raw text on LLM failure
+                return ExtractedDocument(
+                    document_type="unknown",
+                    document_id="PARSE_ERROR",
+                    metadata={
+                        "service": "ocr",
+                        "raw_text": raw_text,
+                        "llm_error": str(e),
+                        "filename": image.filename,
+                        "content_type": image.content_type,
+                        "size_bytes": len(image_bytes),
+                    },
+                    confidence=0.0,
+                )
+        
+        # No LLM parser - return raw text only
+        return ExtractedDocument(
+            document_type="unknown",
+            document_id="UNKNOWN",
+            metadata={
+                "service": "ocr",
+                "raw_text": raw_text,
+                "filename": image.filename,
+                "content_type": image.content_type,
+                "size_bytes": len(image_bytes),
+                "llm_parsing": False,
+            },
+            confidence=0.0,
+        )
+
+    def _convert_parsed_to_extracted(
+        self,
+        parsed: "ParsedDocument",
+        raw_text: str,
+        image: UploadFile,
+    ) -> ExtractedDocument:
+        """
+        Convert ParsedDocument from LLM to ExtractedDocument.
+        
+        Args:
+            parsed: Structured data from LLM parser.
+            raw_text: Original OCR text.
+            image: Original upload file for metadata.
+            
+        Returns:
+            ExtractedDocument with structured data.
+        """
+        # Build metadata from parsed fields
+        metadata: dict = {
+            "service": "ocr",
+            "llm_parsing": True,
+            "filename": image.filename,
+        }
+        
+        # Add parsed fields to metadata
+        if parsed.first_name:
+            metadata["first_name"] = parsed.first_name
+        if parsed.last_name:
+            metadata["last_name"] = parsed.last_name
+        if parsed.date_of_birth:
+            metadata["date_of_birth"] = parsed.date_of_birth
+        if parsed.expiry_date:
+            metadata["expiry_date"] = parsed.expiry_date
+        if parsed.issue_date:
+            metadata["issue_date"] = parsed.issue_date
+        if parsed.address:
+            metadata["address"] = parsed.address
+        if parsed.issuing_authority:
+            metadata["issuing_authority"] = parsed.issuing_authority
+        if parsed.confidence_notes:
+            metadata["confidence_notes"] = parsed.confidence_notes
+        
+        # Merge additional metadata
+        metadata.update(parsed.additional_metadata)
+        
+        return ExtractedDocument(
+            document_type=parsed.document_type.value,
+            document_id=parsed.unique_id or "UNKNOWN",
+            metadata=metadata,
+            confidence=0.8 if parsed.unique_id else 0.5,  # Heuristic confidence
+        )

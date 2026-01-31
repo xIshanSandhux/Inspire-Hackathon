@@ -1,0 +1,4 @@
+All endpoints take an Authentication bearer token that is issued by Clerk M2M (machine-to-machine)
+- POST /upsert-identity take fingerprint data
+- POST /id takes fingerprint data in multipart and returns list of documents with {idType: string, id: string}
+- POST /upload-document authenticates user JWT and takes multipart document(s) that are converted to object(s) and stored
