@@ -32,12 +32,31 @@ def get_auth_provider() -> ClerkAuthProvider | None:
         if settings.clerk_jwks_url:
             jwks_url = settings.clerk_jwks_url
         elif settings.clerk_publishable_key:
-            # Extract the instance ID from the publishable key
-            # pk_test_xxx or pk_live_xxx -> xxx.clerk.accounts.dev
+            # The publishable key is base64 encoded: pk_test_<base64> or pk_live_<base64>
+            # Decode it to get the Clerk frontend API domain
+            import base64
+
             key_parts = settings.clerk_publishable_key.replace("pk_test_", "").replace(
                 "pk_live_", ""
             )
-            jwks_url = f"https://{key_parts}.clerk.accounts.dev/.well-known/jwks.json"
+            try:
+                # Add padding if needed (base64 requires length to be multiple of 4)
+                padding_needed = 4 - (len(key_parts) % 4)
+                if padding_needed != 4:
+                    key_parts += "=" * padding_needed
+                
+                # Decode base64 to get domain (e.g., "first-duckling-82.clerk.accounts.dev$")
+                decoded = base64.b64decode(key_parts).decode("utf-8")
+                # Remove trailing $ if present
+                clerk_domain = decoded.rstrip("$")
+                jwks_url = f"https://{clerk_domain}/.well-known/jwks.json"
+                logger.info(f"[AUTH] Derived JWKS URL: {jwks_url}")
+            except Exception as e:
+                logger.error(f"[AUTH] Failed to decode publishable key: {e}")
+                raise RuntimeError(
+                    "Clerk JWKS URL could not be derived from publishable key. "
+                    "Set CLERK_JWKS_URL explicitly."
+                )
         else:
             raise RuntimeError(
                 "Clerk JWKS URL could not be derived. "
@@ -94,14 +113,18 @@ async def get_current_user(
 
     # If Clerk is not configured, allow unauthenticated access
     if provider is None:
+        logger.debug("[AUTH] Clerk not configured, returning None")
         return None
 
     # Validate as JWT
+    logger.debug("[AUTH] Attempting Clerk JWT validation")
     user_info = await provider.validate_token(token)
 
     if user_info:
+        logger.debug(f"[AUTH] JWT validated successfully for user: {user_info.get('user_id')}")
         return AuthenticatedUser(**user_info)
 
+    logger.debug("[AUTH] JWT validation failed")
     return None
 
 

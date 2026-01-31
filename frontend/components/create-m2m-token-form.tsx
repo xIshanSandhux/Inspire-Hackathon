@@ -34,7 +34,7 @@ export function CreateM2MTokenForm() {
       const result = await createTokenMutation.mutateAsync();
       setTokenData({
         token: result.token,
-        expiresAt: result.expires_at,
+        expiresAt: result.expiresAt,
       });
       setDialogOpen(true);
     } catch {
