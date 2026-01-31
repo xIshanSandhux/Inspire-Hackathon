@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  fingerprint-blockchain:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fingerprint-blockchain
+    image: fingerprint-blockchain:latest
+    
+    # Interactive mode for CLI
+    stdin_open: true
+    tty: true
+    
+    # Persistent storage for blockchain database
+    volumes:
+      - blockchain-data:/app/data
+    
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Database file path (inside container)
+      - FP_DB_PATH=/app/data/fingerprint_blockchain.db
+      # Mining difficulty (1-6, higher = slower but more secure)
+      - FP_DIFFICULTY=2
+      # Optional: Secret salt for additional fingerprint hash security
+      # Uncomment and set a secure random value for production
+      # - FP_SECRET_SALT=your-secure-random-salt-here
+    
+    # Restart policy
+    restart: unless-stopped
+
+volumes:
+  blockchain-data:
+    driver: local

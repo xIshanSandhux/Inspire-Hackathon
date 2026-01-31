@@ -1,0 +1,8 @@
+# Python dependencies for Fingerprint Blockchain System
+
+# Required for AES-256 encryption of ID data
+cryptography>=41.0.0
+
+# Optional dependencies for enhanced functionality:
+# pytest>=7.0.0  # For running tests
+# rich>=13.0.0   # For prettier terminal output (optional)
