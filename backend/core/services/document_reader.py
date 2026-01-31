@@ -54,18 +54,21 @@ def get_document_reader_service() -> DocumentReaderService:
 
     service_type = settings.document_reader_service.lower()
     logger.info(f"[FACTORY] Getting document reader service - type: {service_type}")
+    
+    # Get LLM parser for fallback extraction (used by both services)
+    llm_parser = get_document_llm_parser()
 
     if service_type == "document_ai":
-        # Document AI handles its own structured extraction - no LLM needed
-        logger.info(f"[FACTORY] Creating DocumentAIReaderService - project: {settings.gcp_project_id}, location: {settings.gcp_location}, processor: {settings.document_ai_processor_id}")
+        # Document AI with LLM fallback for when entity extraction fails
+        logger.info(f"[FACTORY] Creating DocumentAIReaderService - project: {settings.gcp_project_id}, location: {settings.gcp_location}, processor: {settings.document_ai_processor_id}, llm_fallback: {'yes' if llm_parser else 'no'}")
         return DocumentAIReaderService(
             project_id=settings.gcp_project_id,
             location=settings.gcp_location,
             processor_id=settings.document_ai_processor_id,
+            llm_parser=llm_parser,  # Add LLM for fallback
         )
     else:
         # OCR reader uses LLM parser for structured extraction (if configured)
-        llm_parser = get_document_llm_parser()
         logger.info(f"[FACTORY] Creating OCRDocumentReaderService - llm_parser: {'configured' if llm_parser else 'None'}")
         return OCRDocumentReaderService(llm_parser=llm_parser)
 
