@@ -13,6 +13,8 @@ logger = get_logger(__name__)
 
 # Singleton provider instance (lazily initialized)
 _auth_provider: ClerkAuthProvider | None = None
+# Set when Clerk secret is present but JWKS URL cannot be derived (avoids retrying on every request)
+_jwks_unavailable: bool = False
 
 
 def get_auth_provider() -> ClerkAuthProvider | None:
@@ -20,15 +22,19 @@ def get_auth_provider() -> ClerkAuthProvider | None:
     Get the singleton ClerkAuthProvider instance.
 
     Returns:
-        ClerkAuthProvider if Clerk is configured, None otherwise.
+        ClerkAuthProvider if Clerk is configured and JWKS URL is available, None otherwise.
     """
-    global _auth_provider
+    global _auth_provider, _jwks_unavailable
 
     if not settings.clerk_configured:
         return None
 
+    if _jwks_unavailable:
+        return None
+
     if _auth_provider is None:
         # Derive JWKS URL from publishable key if not explicitly set
+        jwks_url: str | None = None
         if settings.clerk_jwks_url:
             jwks_url = settings.clerk_jwks_url
         elif settings.clerk_publishable_key:
@@ -52,16 +58,21 @@ def get_auth_provider() -> ClerkAuthProvider | None:
                 jwks_url = f"https://{clerk_domain}/.well-known/jwks.json"
                 logger.info(f"[AUTH] Derived JWKS URL: {jwks_url}")
             except Exception as e:
-                logger.error(f"[AUTH] Failed to decode publishable key: {e}")
-                raise RuntimeError(
-                    "Clerk JWKS URL could not be derived from publishable key. "
-                    "Set CLERK_JWKS_URL explicitly."
+                logger.warning(
+                    "[AUTH] Clerk JWKS URL could not be derived from publishable key: %s. "
+                    "Set CLERK_JWKS_URL or fix CLERK_PUBLISHABLE_KEY. Clerk JWT validation disabled.",
+                    e,
                 )
+                _jwks_unavailable = True
+                return None
         else:
-            raise RuntimeError(
-                "Clerk JWKS URL could not be derived. "
-                "Set CLERK_JWKS_URL or CLERK_PUBLISHABLE_KEY."
+            logger.warning(
+                "[AUTH] Clerk JWKS URL could not be derived. "
+                "Set CLERK_JWKS_URL or CLERK_PUBLISHABLE_KEY in .env to enable Clerk JWT validation. "
+                "API key auth still works if API_KEYS is set."
             )
+            _jwks_unavailable = True
+            return None
 
         _auth_provider = ClerkAuthProvider(
             secret_key=settings.clerk_secret_key,  # type: ignore

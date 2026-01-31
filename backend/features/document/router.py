@@ -54,14 +54,14 @@ async def add_document(
     
     logger.info(f"[ROUTER] Document processed successfully:")
     logger.info(f"  - document.document_type: {document.document_type}")
-    logger.info(f"  - document.document_id: {document.document_id}")
     logger.info(f"  - extracted.document_type: {extracted.document_type}")
     logger.info(f"  - extracted.document_id: {extracted.document_id}")
     logger.info(f"  - extracted.confidence: {extracted.confidence}")
     logger.debug(f"  - extracted.metadata: {extracted.metadata}")
 
-    # Filter metadata to only include user-relevant fields
-    raw_metadata = document.doc_metadata or {}
+    # Use extracted values (unencrypted) for the response
+    # Note: document.document_id and document.doc_metadata are stored encrypted
+    raw_metadata = extracted.metadata or {}
     user_fields = {
         "first_name", "last_name", "date_of_birth", "expiry_date", "issue_date",
         "address", "sex", "issuing_authority", "nationality", "place_of_birth",
@@ -71,7 +71,7 @@ async def add_document(
     response = AddDocumentResponse(
         fingerprint_hash=fingerprint_hash,
         document_type=document.document_type,
-        id=document.document_id,
+        id=extracted.document_id,  # Use extracted (unencrypted) document_id
         metadata=filtered_metadata,
         confidence=extracted.confidence,
     )

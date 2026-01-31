@@ -1,10 +1,11 @@
 """Business logic for document operations."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, UploadFile
 from sqlalchemy.orm import Session
 
+from backend.core.crypto import decrypt_json, decrypt_value, encrypt_json, encrypt_value
 from backend.core.db import get_db
 from backend.core.services.document_reader import (
     DocumentReaderService,
@@ -93,7 +94,15 @@ class DocumentService:
         document_id: str,
         metadata: dict | None = None,
     ) -> Document:
-        """Create or update a document for an identity."""
+        """
+        Create or update a document for an identity.
+        
+        All sensitive data (document_id and metadata) is encrypted before storage.
+        """
+        # Encrypt sensitive data before storage
+        encrypted_document_id = encrypt_value(document_id)
+        encrypted_metadata = encrypt_json(metadata)
+        
         # Check if document type already exists for this identity
         existing_doc = self.db.query(Document).filter(
             Document.identity_id == identity_id,
@@ -101,19 +110,19 @@ class DocumentService:
         ).first()
 
         if existing_doc:
-            # Update existing document
-            existing_doc.document_id = document_id
-            existing_doc.doc_metadata = metadata
+            # Update existing document with encrypted values
+            existing_doc.document_id = encrypted_document_id
+            existing_doc.doc_metadata = encrypted_metadata
             self.db.commit()
             self.db.refresh(existing_doc)
             return existing_doc
 
-        # Create new document
+        # Create new document with encrypted values
         document = Document(
             identity_id=identity_id,
             document_type=document_type,
-            document_id=document_id,
-            doc_metadata=metadata,
+            document_id=encrypted_document_id,
+            doc_metadata=encrypted_metadata,
         )
         self.db.add(document)
         self.db.commit()
@@ -121,11 +130,35 @@ class DocumentService:
         return document
 
     def get_for_identity(self, fingerprint_hash: str) -> list[Document]:
-        """Get all documents for an identity."""
+        """Get all documents for an identity (raw encrypted data)."""
         identity = self.identity_service.get_by_fingerprint(fingerprint_hash)
         if not identity:
             return []
         return identity.documents
+
+    @staticmethod
+    def decrypt_document_id(document: Document) -> str:
+        """Decrypt a document's document_id field."""
+        return decrypt_value(document.document_id)
+
+    @staticmethod
+    def decrypt_document_metadata(document: Document) -> dict[str, Any] | None:
+        """Decrypt a document's metadata field."""
+        return decrypt_json(document.doc_metadata)
+
+    @staticmethod
+    def get_decrypted_document_data(document: Document) -> dict[str, Any]:
+        """
+        Get fully decrypted document data.
+        
+        Returns:
+            Dict with document_type, document_id (decrypted), and metadata (decrypted).
+        """
+        return {
+            "document_type": document.document_type,
+            "document_id": decrypt_value(document.document_id),
+            "metadata": decrypt_json(document.doc_metadata),
+        }
 
 
 def get_document_service(
