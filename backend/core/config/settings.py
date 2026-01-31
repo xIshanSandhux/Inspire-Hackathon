@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     gcp_location: str = "us"  # "us" or "eu" for Document AI
     document_ai_processor_id: str | None = None  # Identity document processor ID
 
+    # Clerk Authentication
+    clerk_secret_key: str | None = None  # sk_test_xxx or sk_live_xxx
+    clerk_publishable_key: str | None = None  # pk_test_xxx or pk_live_xxx
+    clerk_jwks_url: str | None = None  # Auto-derived if not set
+
     # Application
     app_env: str = "development"
     debug: bool = True
@@ -37,6 +42,11 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def clerk_configured(self) -> bool:
+        """Check if Clerk authentication is configured."""
+        return self.clerk_secret_key is not None
 
 
 @lru_cache

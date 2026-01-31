@@ -13,6 +13,10 @@ pydantic-settings>=2.1.0
 # Encryption
 cryptography>=42.0.0
 
+# Authentication
+PyJWT>=2.8.0
+clerk-backend-api>=4.2.0
+
 # AI/ML - Document AI for identity document processing
 google-cloud-documentai>=2.20.0
 
