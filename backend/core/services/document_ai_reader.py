@@ -1,5 +1,6 @@
 """Google Document AI-based document reader service implementation."""
 
+import re
 from typing import Any
 
 from fastapi import UploadFile
@@ -68,19 +69,23 @@ class DocumentAIReaderService:
             f"/processors/{self.processor_id}"
         )
 
-    async def extract_from_image(self, image: UploadFile) -> ExtractedDocument:
+    async def extract_from_image(
+        self, image: UploadFile, document_type: str | None = None
+    ) -> ExtractedDocument:
         """
         Extract document data from an uploaded image using Document AI.
 
         Args:
             image: The uploaded document image file.
+            document_type: Optional hint about document type (used for fallback detection).
 
         Returns:
             ExtractedDocument with the extracted data.
         """
         from google.cloud import documentai_v1 as documentai
 
-        logger.info(f"[DOC_AI] extract_from_image called - file: {image.filename}, content_type: {image.content_type}")
+        logger.info(f"[DOC_AI] extract_from_image called - file: {image.filename}, content_type: {image.content_type}, document_type_hint: {document_type}")
+        self._document_type_hint = document_type  # Store for use in parsing
 
         # Read image bytes
         image_bytes = await image.read()
@@ -211,12 +216,27 @@ class DocumentAIReaderService:
             if entity_type not in ["portrait"]:  # Skip binary data
                 metadata[f"raw_{entity_type}"] = mention_text
 
-        # Detect document type from entities or text
-        document_type = self._detect_document_type(document, entities)
+        # Detect document type from entities or text (use hint if available)
+        document_type = getattr(self, '_document_type_hint', None) or self._detect_document_type(document, entities)
         logger.info(f"[DOC_AI] Detected document_type: {document_type}")
+
+        # If no document_id found in entities, try to extract from raw text
+        if document_id == "UNKNOWN" and document.text:
+            logger.info(f"[DOC_AI] No document_id entity found, attempting fallback extraction from raw text...")
+            fallback_id = self._extract_id_from_text(document.text, document_type)
+            if fallback_id:
+                document_id = fallback_id
+                metadata["id_extraction_method"] = "fallback_regex"
+                logger.info(f"[DOC_AI] Fallback extraction successful: {document_id}")
+            else:
+                logger.warning(f"[DOC_AI] Fallback extraction failed - no ID pattern found in text")
 
         # Calculate average confidence
         avg_confidence = total_confidence / confidence_count if confidence_count > 0 else 0.0
+        
+        # Adjust confidence if we had to use fallback
+        if metadata.get("id_extraction_method") == "fallback_regex":
+            avg_confidence = max(avg_confidence, 0.7)  # Give decent confidence for regex match
 
         # Add service info and raw text for debugging
         metadata["service"] = "document_ai"
@@ -271,3 +291,92 @@ class DocumentAIReaderService:
             return "id_document"
 
         return "unknown"
+
+    def _extract_id_from_text(self, raw_text: str, document_type: str) -> str | None:
+        """
+        Extract document ID from raw text using regex patterns.
+        
+        This is a fallback when Document AI doesn't extract a document_id entity.
+        
+        Args:
+            raw_text: The raw OCR text from the document.
+            document_type: The detected/hinted document type.
+            
+        Returns:
+            Extracted ID string, or None if no pattern matched.
+        """
+        logger.info(f"[DOC_AI] Attempting fallback ID extraction for document_type: {document_type}")
+        
+        # Normalize text for searching
+        text = raw_text.replace('\n', ' ').replace('\r', ' ')
+        
+        # Driver's License patterns (BC, Canadian, US)
+        if document_type in ("drivers_license", "unknown"):
+            # BC Driver's License: NDL, LDL, or DL followed by colon/space and digits
+            # Pattern: NDL:01944956 or DL: 12345678 or LDL 12345678
+            dl_patterns = [
+                r'NDL[:\s]*(\d{7,9})',      # NDL:01944956
+                r'LDL[:\s]*(\d{7,9})',      # LDL:12345678  
+                r'DL[:\s]*(\d{7,9})',       # DL: 12345678
+                r'DLN[:\s]*(\d{7,9})',      # DLN: 12345678
+                r'LICENCE\s*(?:NO\.?|NUMBER|#)?[:\s]*(\d{7,9})',  # LICENCE NO: 12345678
+                r'LICENSE\s*(?:NO\.?|NUMBER|#)?[:\s]*(\d{7,9})',  # LICENSE NO: 12345678
+            ]
+            
+            for pattern in dl_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    dl_number = match.group(1)
+                    logger.info(f"[DOC_AI] Found driver's license number with pattern '{pattern}': {dl_number}")
+                    return dl_number
+        
+        # BC Services Card / Health Card patterns
+        if document_type in ("bc_services", "health_card", "unknown"):
+            # PHN is 10 digits, may have spaces: 9012 345 678
+            phn_patterns = [
+                r'PERSONAL\s*HEALTH\s*(?:NUMBER|NO\.?|#)?[:\s]*(\d[\d\s]{8,11}\d)',
+                r'PHN[:\s]*(\d[\d\s]{8,11}\d)',
+                r'HEALTH\s*(?:NUMBER|NO\.?|#)?[:\s]*(\d{10})',
+            ]
+            
+            for pattern in phn_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    # Remove spaces from PHN
+                    phn = re.sub(r'\s', '', match.group(1))
+                    if len(phn) == 10:
+                        logger.info(f"[DOC_AI] Found PHN with pattern '{pattern}': {phn}")
+                        return phn
+        
+        # Passport patterns
+        if document_type in ("passport", "unknown"):
+            # Passport numbers are typically 8-9 alphanumeric characters
+            passport_patterns = [
+                r'PASSPORT\s*(?:NO\.?|NUMBER|#)?[:\s]*([A-Z]{1,2}\d{6,8})',
+                r'PASSPORT\s*(?:NO\.?|NUMBER|#)?[:\s]*(\d{9})',
+                # MRZ line 1 contains passport number after country code
+                r'[A-Z]{3}([A-Z0-9]{9})',  # Very basic MRZ pattern
+            ]
+            
+            for pattern in passport_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    passport_num = match.group(1).upper()
+                    logger.info(f"[DOC_AI] Found passport number with pattern '{pattern}': {passport_num}")
+                    return passport_num
+        
+        # Generic fallback: look for any labeled ID number
+        generic_patterns = [
+            r'(?:ID|CARD)\s*(?:NO\.?|NUMBER|#)?[:\s]*([A-Z0-9]{6,12})',
+            r'(?:NO\.?|NUMBER|#)[:\s]*([A-Z0-9]{7,12})',
+        ]
+        
+        for pattern in generic_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                id_num = match.group(1)
+                logger.info(f"[DOC_AI] Found generic ID with pattern '{pattern}': {id_num}")
+                return id_num
+        
+        logger.warning(f"[DOC_AI] No ID pattern matched in text")
+        return None
