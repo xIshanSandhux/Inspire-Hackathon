@@ -5,6 +5,10 @@ from typing import Any
 import instructor
 from openai import OpenAI
 
+from backend.core.util import get_logger
+
+logger = get_logger(__name__)
+
 
 class OpenRouterClient:
     """
@@ -30,6 +34,11 @@ class OpenRouterClient:
             model: Model identifier (e.g., "anthropic/claude-3.5-sonnet").
             default_headers: Optional headers (e.g., HTTP-Referer, X-Title).
         """
+        logger.info(f"[OPENROUTER] Initializing OpenRouterClient")
+        logger.info(f"[OPENROUTER] api_key: {api_key[:20]}..." if api_key else "[OPENROUTER] api_key: NOT SET")
+        logger.info(f"[OPENROUTER] model: {model}")
+        logger.info(f"[OPENROUTER] base_url: {self.OPENROUTER_BASE_URL}")
+        
         self.api_key = api_key
         self.model = model
         self.default_headers = default_headers or {}
@@ -41,13 +50,24 @@ class OpenRouterClient:
         
         The client is lazily initialized and cached.
         """
+        logger.info(f"[OPENROUTER] get_instructor_client() called")
+        
         if self._instructor_client is None:
+            logger.info(f"[OPENROUTER] Creating new instructor client...")
+            logger.info(f"[OPENROUTER] Base URL: {self.OPENROUTER_BASE_URL}")
+            logger.info(f"[OPENROUTER] API Key: {self.api_key[:20]}...")
+            
             base_client = OpenAI(
                 base_url=self.OPENROUTER_BASE_URL,
                 api_key=self.api_key,
                 default_headers=self.default_headers,
             )
+            logger.info(f"[OPENROUTER] Base OpenAI client created")
+            
             self._instructor_client = instructor.from_openai(base_client)
+            logger.info(f"[OPENROUTER] Instructor client created successfully")
+        else:
+            logger.info(f"[OPENROUTER] Returning cached instructor client")
 
         return self._instructor_client
 

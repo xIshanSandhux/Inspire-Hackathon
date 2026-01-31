@@ -10,107 +10,155 @@ logger = get_logger(__name__)
 
 
 # Base prompt template - used for unknown/generic documents
-BASE_EXTRACTION_PROMPT = """You are an expert at extracting structured data from identity documents.
+BASE_EXTRACTION_PROMPT = """You are an expert document analyst specializing in identity document data extraction.
 
-Analyze this document image and extract all relevant identity information.
+Your task is to extract structured information from this identity document image.
 
-Guidelines:
-- Extract names exactly as they appear on the document
-- For dates, convert to ISO format (YYYY-MM-DD) when possible
-- The unique_id should be the primary identifier on the document
-- Include any additional relevant fields in additional_metadata
-- Note any ambiguities or low-confidence extractions in confidence_notes
-- If a field is not present or cannot be determined, leave it as null"""
+CRITICAL REQUIREMENTS:
+1. The 'unique_id' field is MANDATORY - you MUST find and extract the document's primary identifier number
+2. Look carefully for any ID numbers, license numbers, card numbers, or reference codes
+3. Extract names EXACTLY as they appear (preserve capitalization)
+4. Convert ALL dates to ISO format: YYYY-MM-DD
+
+EXTRACTION PRIORITY:
+1. unique_id - The document's main identifier (license number, passport number, card number, etc.)
+2. Names (first_name, last_name)
+3. Dates (date_of_birth, expiry_date, issue_date)
+4. Other fields (address, issuing_authority, etc.)
+
+If you cannot find a clear document ID, look for ANY prominent number that could serve as an identifier."""
 
 
 # Tailored prompt for Driver's License
-DRIVERS_LICENSE_PROMPT = """You are an expert at extracting structured data from driver's licenses.
+DRIVERS_LICENSE_PROMPT = """You are an expert at extracting data from driver's licenses. Your extraction must be precise and complete.
 
-Analyze this driver's license image and extract the identity information.
+TASK: Extract all information from this driver's license image.
 
-CRITICAL - Finding the Driver's License Number (unique_id):
-- Look for a 9-DIGIT NUMBER near labels like "DL", "NDL", "LDL", "DLN", "DRIVER LICENSE", or "LIC NO"
-- The number format is typically 7-9 digits (e.g., "123456789" or "1234567")
-- It may appear after "DL:" or "DL " or on its own line
-- This is the MOST IMPORTANT field - search carefully for any 7-9 digit number
-- If you see multiple numbers, the one near "DL", "NDL", "LDL" labels is the license number
+## CRITICAL: Finding the License Number (unique_id)
 
-Other fields to extract:
-- first_name: Given name / first name
-- last_name: Family name / surname  
-- date_of_birth: Look for "DOB", "BIRTH", "BD" - convert to YYYY-MM-DD
-- expiry_date: Look for "EXP", "EXPIRY", "EXPIRES" - convert to YYYY-MM-DD
-- issue_date: Look for "ISS", "ISSUED" - convert to YYYY-MM-DD
-- address: Full address on the license
-- issuing_authority: State/Province that issued (e.g., "British Columbia", "California")
+The license number is the MOST IMPORTANT field. Search carefully for it:
+
+COMMON LABELS (the number appears RIGHT AFTER these):
+- "NDL:" followed by digits → e.g., "NDL:01944956" means unique_id = "01944956"
+- "LDL:" followed by digits → e.g., "LDL:12345678" means unique_id = "12345678"  
+- "DL:" or "DL " followed by digits → e.g., "DL: 1234567" means unique_id = "1234567"
+- "DLN:" followed by digits
+- "LICENCE NO" or "LICENSE NO" followed by digits
+
+FORMAT: Usually 7-9 digits. Examples: "01944956", "1234567", "123456789"
+
+IMPORTANT: Extract ONLY the number, not the label. If you see "NDL:01944956", return "01944956".
+
+## Other Required Fields
+
+| Field | What to Look For | Format |
+|-------|------------------|--------|
+| first_name | Given name, usually after last name | Exactly as shown (e.g., "ROBERT") |
+| last_name | Family/surname, often first name shown | Exactly as shown (e.g., "THOMLINSON") |
+| date_of_birth | "DOB", "Birth", "BD" + date | Convert to YYYY-MM-DD |
+| expiry_date | "Expires", "Exp" + date | Convert to YYYY-MM-DD |
+| issue_date | "Issued", "Iss" + date | Convert to YYYY-MM-DD |
+| address | Street, city, province, postal code | Full address string |
+| issuing_authority | Province/State name | e.g., "British Columbia" |
+| sex | "Sex", "M/F" | "M", "F", or "X" |
+
+## Additional Metadata
+In additional_metadata, include: license class, restrictions, height, weight, eye color, hair color.
 
 Set document_type to "drivers_license"."""
 
 
 # Tailored prompt for BC Services Card
-BC_SERVICES_PROMPT = """You are an expert at extracting structured data from BC Services Cards (British Columbia health cards).
+BC_SERVICES_PROMPT = """You are an expert at extracting data from BC Services Cards (British Columbia health cards).
 
-Analyze this BC Services Card image and extract the identity information.
+TASK: Extract all information from this BC Services Card image.
 
-CRITICAL - Finding the Personal Health Number (unique_id):
-- Look for "PERSONAL HEALTH NUMBER" or "PHN" label
-- The PHN is a 10-DIGIT NUMBER (e.g., "9012 345 678" or "9012345678")
+## CRITICAL: Finding the Personal Health Number (unique_id)
+
+The PHN is the MOST IMPORTANT field. It is a 10-DIGIT number.
+
+WHERE TO FIND IT:
+- Look for "PERSONAL HEALTH NUMBER" label
+- Look for "PHN" label
 - It may be formatted with spaces: "9012 345 678"
-- Remove any spaces and return just the digits as unique_id
-- This is the MOST IMPORTANT field - the 10-digit number is the PHN
 
-Other fields to extract:
-- first_name: Given name
-- last_name: Family name / surname
-- date_of_birth: Look for "DATE OF BIRTH" or "DOB" - convert to YYYY-MM-DD
-- expiry_date: Card expiry if shown - convert to YYYY-MM-DD
-- address: Not typically on BC Services Cards, leave null if not present
-- issuing_authority: Should be "British Columbia" or "BC"
+FORMAT: Always 10 digits. Examples: "9012345678", "9876543210"
+
+IMPORTANT: Remove any spaces. If you see "9012 345 678", return "9012345678".
+
+## Other Required Fields
+
+| Field | What to Look For | Format |
+|-------|------------------|--------|
+| first_name | Given name | Exactly as shown |
+| last_name | Family/surname | Exactly as shown |
+| date_of_birth | "DATE OF BIRTH", "DOB" | Convert to YYYY-MM-DD |
+| expiry_date | Card expiry date if shown | Convert to YYYY-MM-DD |
+| issuing_authority | Should be "British Columbia" | |
 
 Set document_type to "bc_services"."""
 
 
 # Tailored prompt for Passport
-PASSPORT_PROMPT = """You are an expert at extracting structured data from passports.
+PASSPORT_PROMPT = """You are an expert at extracting data from passports.
 
-Analyze this passport image and extract the identity information.
+TASK: Extract all information from this passport image.
 
-CRITICAL - Finding the Passport Number (unique_id):
-- Look for "PASSPORT NO", "PASSPORT NUMBER", or just the alphanumeric code
-- Passport numbers are typically 8-9 characters, mix of letters and numbers
-- Common formats: "AB123456", "123456789", "A12345678"
-- Check the MRZ (Machine Readable Zone) at the bottom - the passport number is in the first line
-- MRZ format: First 2 chars are country code, next 9 chars include the passport number
-- This is the MOST IMPORTANT field
+## CRITICAL: Finding the Passport Number (unique_id)
 
-Other fields to extract:
-- first_name: Given names
-- last_name: Surname / family name
-- date_of_birth: Convert to YYYY-MM-DD format
-- expiry_date: "DATE OF EXPIRY" - convert to YYYY-MM-DD
-- issue_date: "DATE OF ISSUE" - convert to YYYY-MM-DD  
-- issuing_authority: Country that issued the passport
-- In additional_metadata: nationality, place_of_birth, sex
+The passport number is the MOST IMPORTANT field.
+
+WHERE TO FIND IT:
+- Near "PASSPORT NO" or "PASSPORT NUMBER" label
+- In the MRZ (Machine Readable Zone) - the two lines of text at the bottom
+- MRZ Line 1 format: P<COUNTRY_CODE<SURNAME<<GIVEN_NAMES then passport number
+
+FORMAT: Usually 8-9 alphanumeric characters. Examples: "AB1234567", "GA1234567", "123456789"
+
+## Other Required Fields
+
+| Field | What to Look For | Format |
+|-------|------------------|--------|
+| first_name | Given names | Exactly as shown |
+| last_name | Surname | Exactly as shown |
+| date_of_birth | "DATE OF BIRTH" | Convert to YYYY-MM-DD |
+| expiry_date | "DATE OF EXPIRY" | Convert to YYYY-MM-DD |
+| issue_date | "DATE OF ISSUE" | Convert to YYYY-MM-DD |
+| issuing_authority | Country name | e.g., "Canada", "United States" |
+| sex | Sex/Gender | "M", "F", or "X" |
+
+## Additional Metadata
+In additional_metadata, include: nationality, place_of_birth, country_code.
 
 Set document_type to "passport"."""
 
 
 # Tailored prompt for generic health cards
-HEALTH_CARD_PROMPT = """You are an expert at extracting structured data from health cards.
+HEALTH_CARD_PROMPT = """You are an expert at extracting data from health cards.
 
-Analyze this health card image and extract the identity information.
+TASK: Extract all information from this health card image.
 
-CRITICAL - Finding the Health Number (unique_id):
-- Look for "HEALTH NUMBER", "HEALTH CARD NUMBER", "PHN", "OHIP" or similar labels
-- Health numbers vary by province/state but are typically 9-12 digits
-- This is the MOST IMPORTANT field
+## CRITICAL: Finding the Health Number (unique_id)
 
-Other fields to extract:
-- first_name: Given name
-- last_name: Family name / surname
-- date_of_birth: Convert to YYYY-MM-DD format
-- expiry_date: Card expiry if shown
-- issuing_authority: Province/State that issued the card
+The health card number is the MOST IMPORTANT field.
+
+WHERE TO FIND IT:
+- "HEALTH NUMBER", "HEALTH CARD NUMBER"
+- "PHN" (Personal Health Number)
+- "OHIP" (Ontario Health Insurance Plan)
+- Any prominent 9-12 digit number
+
+FORMAT: Usually 9-12 digits depending on province/state.
+
+## Other Required Fields
+
+| Field | What to Look For | Format |
+|-------|------------------|--------|
+| first_name | Given name | Exactly as shown |
+| last_name | Family/surname | Exactly as shown |
+| date_of_birth | DOB, Date of Birth | Convert to YYYY-MM-DD |
+| expiry_date | Expiry, Valid Until | Convert to YYYY-MM-DD |
+| issuing_authority | Province/State | e.g., "Ontario", "British Columbia" |
 
 Set document_type to "health_card"."""
 
@@ -169,22 +217,42 @@ class DocumentLLMParser:
         Returns:
             ParsedDocument with extracted structured data.
         """
+        logger.info(f"[LLM_PARSER] ========== parse() CALLED ==========")
+        logger.info(f"[LLM_PARSER] raw_text length: {len(raw_text)}")
+        logger.info(f"[LLM_PARSER] raw_text preview: {raw_text[:200]}...")
+        logger.info(f"[LLM_PARSER] filename: {filename}")
+        logger.info(f"[LLM_PARSER] document_type: {document_type}")
+        logger.info(f"[LLM_PARSER] model: {self.client.model}")
+        
         instructor_client = self.client.get_instructor_client()
         prompt = get_prompt_for_document_type(document_type)
+        logger.info(f"[LLM_PARSER] Using prompt for type: {document_type or 'base'}")
+        logger.debug(f"[LLM_PARSER] Prompt preview: {prompt[:300]}...")
 
         # Build user message with context
         user_content = f"Document text:\n{raw_text}"
         if filename:
             user_content = f"Filename: {filename}\n\n{user_content}"
+        
+        logger.info(f"[LLM_PARSER] User content preview: {user_content[:200]}...")
+        logger.info(f"[LLM_PARSER] Making API call to OpenRouter...")
 
-        return instructor_client.chat.completions.create(
-            model=self.client.model,
-            response_model=ParsedDocument,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": user_content},
-            ],
-        )
+        try:
+            result = instructor_client.chat.completions.create(
+                model=self.client.model,
+                response_model=ParsedDocument,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": user_content},
+                ],
+            )
+            logger.info(f"[LLM_PARSER] API call SUCCESS!")
+            logger.info(f"[LLM_PARSER] Result: unique_id={result.unique_id}, document_type={result.document_type}")
+            logger.info(f"[LLM_PARSER] Result: first_name={result.first_name}, last_name={result.last_name}")
+            return result
+        except Exception as e:
+            logger.error(f"[LLM_PARSER] API call FAILED: {type(e).__name__}: {e}")
+            raise
 
     async def parse_async(
         self, raw_text: str, filename: str | None = None, document_type: str | None = None
@@ -201,6 +269,8 @@ class DocumentLLMParser:
             ParsedDocument with extracted structured data.
         """
         import asyncio
+        
+        logger.info(f"[LLM_PARSER] parse_async() called - delegating to parse()")
 
         return await asyncio.to_thread(self.parse, raw_text, filename, document_type)
 
@@ -241,11 +311,19 @@ class DocumentLLMParser:
         logger.debug(f"[LLM_PARSER] Image encoded to base64 - length: {len(image_b64)}")
 
         # Build user message with image and document type hint
-        user_text = "Extract structured data from this identity document."
-        if document_type:
-            user_text = f"This is a {document_type.replace('_', ' ')}. {user_text}"
+        doc_type_label = document_type.replace('_', ' ').title() if document_type else "identity document"
+        
+        user_text = f"""Analyze this {doc_type_label} image and extract all the information.
+
+IMPORTANT: You MUST find and extract the unique_id (document number). This is critical.
+- Look carefully for any ID numbers, license numbers, or card numbers
+- The unique_id is usually near labels like "DL", "NDL", "LDL", "PHN", "Passport No", etc.
+- Extract ONLY the number itself, not the label
+
+Return the extracted data in the structured format requested."""
+        
         if filename:
-            user_text += f" Filename: {filename}"
+            user_text += f"\n\nFilename hint: {filename}"
             
         user_content = [
             {
