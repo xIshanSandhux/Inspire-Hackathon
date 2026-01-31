@@ -1,10 +1,10 @@
 "use client";
 
+import type { Document } from "@/api/useIdentity";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import type { Document } from "@/api/useIdentity";
 
 interface ExtractedInfoDisplayProps {
   documentType: string;
@@ -14,20 +14,24 @@ interface ExtractedInfoDisplayProps {
 
 // Helper to get display name and icon for document type
 function getDocumentDisplay(docType: string): { name: string; icon: string } {
-  const typeUpper = docType.toUpperCase();
-  if (typeUpper.includes("PASSPORT")) {
+  const typeLower = docType.toLowerCase();
+  if (typeLower.includes("passport")) {
     return { name: "Passport", icon: "🛂" };
-  } else if (typeUpper.includes("BCID") || typeUpper.includes("BC_ID") || typeUpper.includes("BC ID")) {
-    return { name: "BC ID", icon: "🪪" };
-  } else if (typeUpper.includes("DRIVER") || typeUpper.includes("LICENSE")) {
+  } else if (
+    typeLower.includes("bc_services") ||
+    typeLower.includes("bcid") ||
+    typeLower.includes("bc_id")
+  ) {
+    return { name: "BC Services Card", icon: "🪪" };
+  } else if (typeLower.includes("driver") || typeLower.includes("license")) {
     return { name: "Driver's License", icon: "🚗" };
-  } else if (typeUpper.includes("HEALTH")) {
+  } else if (typeLower.includes("health")) {
     return { name: "Health Card", icon: "🏥" };
   }
   // Default: format the type nicely
-  return { 
-    name: docType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()), 
-    icon: "📄" 
+  return {
+    name: docType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+    icon: "📄",
   };
 }
 

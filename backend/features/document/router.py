@@ -18,6 +18,7 @@ async def add_document(
     user: RequiredUser,
     fingerprint_hash: str = Form(...),
     image: UploadFile = File(...),
+    document_type: str | None = Form(None),
 ):
     """
     Add a document to an identity from an uploaded image.
@@ -25,14 +26,21 @@ async def add_document(
     The image is processed to extract document type, ID, and metadata.
     If the document_type already exists for this identity, it will be updated.
     Returns 404 if identity not found.
+    
+    Supported document_type values for tailored extraction:
+    - drivers_license: Driver's license (looks for 9-digit number near DL/NDL/LDL)
+    - bc_services: BC Services Card (looks for 10-digit PHN)
+    - passport: Passport (looks for passport number in MRZ or header)
+    - health_card: Generic health card
 
     Requires authentication.
     """
-    logger.info(f"[ROUTER] add_document called - fingerprint: {fingerprint_hash[:8]}..., file: {image.filename}, content_type: {image.content_type}")
+    logger.info(f"[ROUTER] add_document called - fingerprint: {fingerprint_hash[:8]}..., file: {image.filename}, content_type: {image.content_type}, document_type: {document_type}")
     
     result = await service.add_from_image(
         fingerprint_hash=fingerprint_hash,
         image=image,
+        document_type=document_type,
     )
 
     if not result:

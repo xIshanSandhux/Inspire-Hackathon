@@ -1,11 +1,20 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import type { FrontendDocumentType } from "@/api/useIdentity";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+
+// Display labels for each document type
+const DOCUMENT_LABELS: Record<FrontendDocumentType, string> = {
+  DRIVERS_LICENSE: "Driver's License",
+  PASSPORT: "Passport",
+  BC_SERVICES: "BC Services Card",
+  BCID: "BC Services Card",
+};
 
 interface CameraCaptureProps {
-  documentType: "PASSPORT" | "BCID";
+  documentType: FrontendDocumentType;
   onCapture: (imageBase64: string) => void;
   onCancel: () => void;
   isUploading: boolean;
@@ -174,7 +183,7 @@ export function CameraCapture({
         {/* Instructions */}
         <div className="text-center">
           <p className="text-lg font-medium">
-            {documentType === "PASSPORT" ? "Passport" : "BC ID"}
+            {DOCUMENT_LABELS[documentType] || documentType}
           </p>
           <p className="text-sm text-muted-foreground">
             {capturedImage

@@ -59,7 +59,9 @@ class OCRDocumentReaderService:
         # return pytesseract.image_to_string(image)
         return "[OCR STUB] No text extracted - implement OCR library"
 
-    async def extract_from_image(self, image: UploadFile) -> ExtractedDocument:
+    async def extract_from_image(
+        self, image: UploadFile, document_type: str | None = None
+    ) -> ExtractedDocument:
         """
         Extract document data from an uploaded image.
 
@@ -68,11 +70,12 @@ class OCRDocumentReaderService:
 
         Args:
             image: The uploaded document image file.
+            document_type: Optional hint about document type for tailored extraction.
 
         Returns:
             ExtractedDocument with the extracted data.
         """
-        logger.info(f"[OCR] extract_from_image called - file: {image.filename}, content_type: {image.content_type}")
+        logger.info(f"[OCR] extract_from_image called - file: {image.filename}, content_type: {image.content_type}, document_type: {document_type}")
         
         # Read image bytes
         image_bytes = await image.read()
@@ -81,11 +84,11 @@ class OCRDocumentReaderService:
         
         # If LLM parser is available, use vision to parse image directly
         if self.llm_parser:
-            logger.info(f"[OCR] LLM parser available, attempting vision-based parsing...")
+            logger.info(f"[OCR] LLM parser available, attempting vision-based parsing with document_type: {document_type}")
             try:
                 # Try vision-based parsing first (sends image directly to LLM)
                 parsed = await self.llm_parser.parse_image_async(
-                    image_bytes, mime_type, image.filename
+                    image_bytes, mime_type, image.filename, document_type
                 )
                 logger.info(f"[OCR] Vision parsing successful - document_type: {parsed.document_type}, unique_id: {parsed.unique_id}")
                 logger.debug(f"[OCR] Parsed fields: first_name={parsed.first_name}, last_name={parsed.last_name}, dob={parsed.date_of_birth}")
@@ -99,7 +102,7 @@ class OCRDocumentReaderService:
                     raw_text = self._extract_raw_text(image_bytes)
                     logger.info(f"[OCR] Fallback OCR text: {raw_text[:100]}...")
                     if not raw_text.startswith("[OCR STUB]"):
-                        parsed = await self.llm_parser.parse_async(raw_text, image.filename)
+                        parsed = await self.llm_parser.parse_async(raw_text, image.filename, document_type)
                         logger.info(f"[OCR] Text parsing successful - unique_id: {parsed.unique_id}")
                         return self._convert_parsed_to_extracted(parsed, raw_text, image)
                 except Exception as e2:
@@ -108,7 +111,7 @@ class OCRDocumentReaderService:
                 # Return error response
                 logger.warning(f"[OCR] Returning PARSE_ERROR result")
                 return ExtractedDocument(
-                    document_type="unknown",
+                    document_type=document_type or "unknown",
                     document_id="PARSE_ERROR",
                     metadata={
                         "service": "ocr",
@@ -124,7 +127,7 @@ class OCRDocumentReaderService:
         logger.warning(f"[OCR] No LLM parser available, returning raw OCR result")
         raw_text = self._extract_raw_text(image_bytes)
         return ExtractedDocument(
-            document_type="unknown",
+            document_type=document_type or "unknown",
             document_id="UNKNOWN",
             metadata={
                 "service": "ocr",

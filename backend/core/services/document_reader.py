@@ -25,12 +25,15 @@ class ExtractedDocument:
 class DocumentReaderService(Protocol):
     """Protocol for document reader services."""
 
-    async def extract_from_image(self, image: UploadFile) -> ExtractedDocument:
+    async def extract_from_image(
+        self, image: UploadFile, document_type: str | None = None
+    ) -> ExtractedDocument:
         """
         Extract document data from an uploaded image.
 
         Args:
             image: The uploaded document image file.
+            document_type: Optional hint about the document type for better extraction.
 
         Returns:
             ExtractedDocument with the extracted data.

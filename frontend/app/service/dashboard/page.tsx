@@ -1,21 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Card, CardContent } from "@/components/ui/card";
-import { ServiceSignOutButton } from "@/components/service-sign-out-button";
-import { FingerprintScanner } from "@/components/fingerprint-scanner";
-import { DocumentSelector } from "@/components/document-selector";
-import { CameraCapture } from "@/components/camera-capture";
-import { ExtractedInfoDisplay } from "@/components/extracted-info-display";
 import {
+  DOCUMENT_TYPES,
   useCreateIdentity,
   useUploadDocument,
-  type Documents,
-  type Document,
   type AddDocumentResponse,
+  type Document,
+  type Documents,
+  type FrontendDocumentType,
 } from "@/api/useIdentity";
+import { CameraCapture } from "@/components/camera-capture";
+import { DocumentSelector } from "@/components/document-selector";
+import { ExtractedInfoDisplay } from "@/components/extracted-info-display";
+import { FingerprintScanner } from "@/components/fingerprint-scanner";
+import { ServiceSignOutButton } from "@/components/service-sign-out-button";
+import { Card, CardContent } from "@/components/ui/card";
+import { AnimatePresence, motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type FlowStep = "scan" | "select" | "capture" | "result";
 
@@ -39,8 +41,11 @@ export default function ServiceDashboard() {
   const [isScanning, setIsScanning] = useState(false);
   const [fingerprintHash, setFingerprintHash] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Documents>({});
-  const [selectedDocType, setSelectedDocType] = useState<"PASSPORT" | "BCID" | null>(null);
-  const [extractedDocument, setExtractedDocument] = useState<Document | null>(null);
+  const [selectedDocType, setSelectedDocType] =
+    useState<FrontendDocumentType | null>(null);
+  const [extractedDocument, setExtractedDocument] = useState<Document | null>(
+    null,
+  );
   const [extractedDocType, setExtractedDocType] = useState<string | null>(null);
 
   const createIdentity = useCreateIdentity();
@@ -70,7 +75,7 @@ export default function ServiceDashboard() {
     }
   };
 
-  const handleDocumentSelect = (type: "PASSPORT" | "BCID") => {
+  const handleDocumentSelect = (type: FrontendDocumentType) => {
     setSelectedDocType(type);
     setCurrentStep("capture");
   };
@@ -81,10 +86,12 @@ export default function ServiceDashboard() {
     try {
       // Convert base64 to File for multipart upload
       const imageFile = base64ToFile(imageBase64, `document_${Date.now()}.jpg`);
-      
+
+      // Pass document type for tailored extraction
       const result: AddDocumentResponse = await uploadDocument.mutateAsync({
         fingerprintHash,
         imageFile,
+        documentType: selectedDocType,
       });
 
       // Extract document info from response
@@ -96,15 +103,37 @@ export default function ServiceDashboard() {
       setCurrentStep("result");
     } catch (error) {
       console.error("Failed to upload document:", error);
-      // For demo, show mock result
+      // For demo, show mock result with backend type
+      const backendType = DOCUMENT_TYPES[selectedDocType];
+      const mockData: Record<
+        string,
+        { id: string; metadata: Record<string, string> }
+      > = {
+        drivers_license: {
+          id: "DL123456789",
+          metadata: {
+            issuing_authority: "British Columbia",
+            expiry_date: "2030-12-31",
+          },
+        },
+        passport: {
+          id: "AB1234567",
+          metadata: { country: "Canada", expiry_date: "2030-12-31" },
+        },
+        bc_services: {
+          id: "9012345678",
+          metadata: {
+            issuing_authority: "BC Services",
+            issue_date: "2020-01-01",
+          },
+        },
+      };
+      const mock = mockData[backendType] || mockData.drivers_license;
       setExtractedDocument({
-        id: selectedDocType === "PASSPORT" ? "P123456789" : "BC987654321",
-        metadata:
-          selectedDocType === "PASSPORT"
-            ? { country: "Canada", expiry_date: "2030-12-31" }
-            : { issued_by: "BC Services Card", issue_date: "2020-01-01" },
+        id: mock.id,
+        metadata: mock.metadata,
       });
-      setExtractedDocType(selectedDocType);
+      setExtractedDocType(backendType);
       setCurrentStep("result");
     }
   };
@@ -194,25 +223,27 @@ export default function ServiceDashboard() {
             </motion.div>
           )}
 
-          {currentStep === "result" && extractedDocument && extractedDocType && (
-            <motion.div
-              key="result"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 flex items-center justify-center p-4"
-            >
-              <Card className="w-full max-w-md">
-                <CardContent className="pt-6">
-                  <ExtractedInfoDisplay
-                    documentType={extractedDocType}
-                    document={extractedDocument}
-                    onComplete={handleReset}
-                  />
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
+          {currentStep === "result" &&
+            extractedDocument &&
+            extractedDocType && (
+              <motion.div
+                key="result"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 flex items-center justify-center p-4"
+              >
+                <Card className="w-full max-w-md">
+                  <CardContent className="pt-6">
+                    <ExtractedInfoDisplay
+                      documentType={extractedDocType}
+                      document={extractedDocument}
+                      onComplete={handleReset}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
         </AnimatePresence>
       </div>
     </div>

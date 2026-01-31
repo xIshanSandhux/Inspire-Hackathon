@@ -35,14 +35,20 @@ class DocumentService:
         self,
         fingerprint_hash: str,
         image: UploadFile,
+        document_type: str | None = None,
     ) -> tuple[Document, ExtractedDocument] | None:
         """
         Add a document from an uploaded image.
 
         Extracts document data from the image and stores it.
         Returns None if identity not found.
+        
+        Args:
+            fingerprint_hash: The identity's fingerprint hash.
+            image: The uploaded document image.
+            document_type: Optional hint about the document type for better extraction.
         """
-        logger.info(f"[SERVICE] add_from_image called - fingerprint: {fingerprint_hash[:8]}...")
+        logger.info(f"[SERVICE] add_from_image called - fingerprint: {fingerprint_hash[:8]}..., document_type: {document_type}")
         
         identity = self.identity_service.get_by_fingerprint(fingerprint_hash)
         if not identity:
@@ -51,9 +57,9 @@ class DocumentService:
         
         logger.info(f"[SERVICE] Identity found - id: {identity.id}")
 
-        # Extract document data from image (validation is implicit)
-        logger.info(f"[SERVICE] Calling document_reader.extract_from_image...")
-        extracted = await self.document_reader.extract_from_image(image)
+        # Extract document data from image with document type hint
+        logger.info(f"[SERVICE] Calling document_reader.extract_from_image with document_type: {document_type}")
+        extracted = await self.document_reader.extract_from_image(image, document_type)
         
         logger.info(f"[SERVICE] Extraction result:")
         logger.info(f"  - extracted.document_type: {extracted.document_type}")
@@ -61,11 +67,17 @@ class DocumentService:
         logger.info(f"  - extracted.confidence: {extracted.confidence}")
         logger.debug(f"  - extracted.metadata keys: {list(extracted.metadata.keys())}")
 
+        # Use the provided document_type if extraction didn't determine one
+        final_document_type = extracted.document_type
+        if final_document_type == "unknown" and document_type:
+            final_document_type = document_type
+            logger.info(f"[SERVICE] Using provided document_type: {final_document_type}")
+
         # Store the document
         logger.info(f"[SERVICE] Upserting document...")
         document = self._upsert_document(
             identity_id=identity.id,
-            document_type=extracted.document_type,
+            document_type=final_document_type,
             document_id=extracted.document_id,
             metadata=extracted.metadata,
         )

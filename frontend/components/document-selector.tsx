@@ -1,13 +1,13 @@
 "use client";
 
-import { motion } from "framer-motion";
+import type { Documents, FrontendDocumentType } from "@/api/useIdentity";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Documents } from "@/api/useIdentity";
+import { motion } from "framer-motion";
 
 interface DocumentSelectorProps {
   documents: Documents;
-  onSelect: (type: "PASSPORT" | "BCID") => void;
+  onSelect: (type: FrontendDocumentType) => void;
   onCancel: () => void;
 }
 
@@ -16,9 +16,25 @@ export function DocumentSelector({
   onSelect,
   onCancel,
 }: DocumentSelectorProps) {
-  const hasPassport = !!documents.PASSPORT;
-  const hasBCID = !!documents.BCID;
-  const isNewUser = !hasPassport && !hasBCID;
+  // Check for existing documents by backend type
+  const hasPassport = !!documents.passport || !!documents.PASSPORT;
+  const hasBCServices =
+    !!documents.bc_services || !!documents.BC_SERVICES || !!documents.BCID;
+  const hasDriversLicense =
+    !!documents.drivers_license || !!documents.DRIVERS_LICENSE;
+  const isNewUser = !hasPassport && !hasBCServices && !hasDriversLicense;
+
+  // Get document by checking multiple possible keys
+  const getDocument = (keys: string[]) => {
+    for (const key of keys) {
+      if (documents[key]) return documents[key];
+    }
+    return null;
+  };
+
+  const passportDoc = getDocument(["passport", "PASSPORT"]);
+  const bcServicesDoc = getDocument(["bc_services", "BC_SERVICES", "BCID"]);
+  const driversLicenseDoc = getDocument(["drivers_license", "DRIVERS_LICENSE"]);
 
   return (
     <motion.div
@@ -33,7 +49,7 @@ export function DocumentSelector({
         <p className="text-muted-foreground">
           {isNewUser
             ? "Please add a document to verify your identity"
-            : "Select a document to add (you cannot update existing documents)"}
+            : "Select a document to add or update"}
         </p>
       </div>
 
@@ -42,7 +58,26 @@ export function DocumentSelector({
         <div className="space-y-3">
           <p className="text-sm font-medium">Your Documents:</p>
           <div className="grid gap-3">
-            {hasPassport && (
+            {driversLicenseDoc && (
+              <Card className="bg-muted/50">
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="text-green-500">✓</span> Driver&apos;s
+                    License
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="py-2 text-xs text-muted-foreground">
+                  <p>ID: {driversLicenseDoc.id}</p>
+                  {driversLicenseDoc.metadata.issuing_authority && (
+                    <p>
+                      Issued by:{" "}
+                      {String(driversLicenseDoc.metadata.issuing_authority)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            {passportDoc && (
               <Card className="bg-muted/50">
                 <CardHeader className="py-3">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -50,21 +85,28 @@ export function DocumentSelector({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="py-2 text-xs text-muted-foreground">
-                  <p>ID: {documents.PASSPORT?.id}</p>
-                  <p>Country: {documents.PASSPORT?.metadata.country}</p>
+                  <p>ID: {passportDoc.id}</p>
+                  {passportDoc.metadata.country && (
+                    <p>Country: {String(passportDoc.metadata.country)}</p>
+                  )}
                 </CardContent>
               </Card>
             )}
-            {hasBCID && (
+            {bcServicesDoc && (
               <Card className="bg-muted/50">
                 <CardHeader className="py-3">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <span className="text-green-500">✓</span> BC ID
+                    <span className="text-green-500">✓</span> BC Services Card
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="py-2 text-xs text-muted-foreground">
-                  <p>ID: {documents.BCID?.id}</p>
-                  <p>Issued by: {documents.BCID?.metadata.issued_by}</p>
+                  <p>PHN: {bcServicesDoc.id}</p>
+                  {bcServicesDoc.metadata.issuing_authority && (
+                    <p>
+                      Issued by:{" "}
+                      {String(bcServicesDoc.metadata.issuing_authority)}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -76,6 +118,22 @@ export function DocumentSelector({
       <div className="space-y-3">
         <p className="text-sm font-medium">Add a Document:</p>
         <div className="grid gap-3">
+          <Button
+            variant="outline"
+            className="h-16 justify-start gap-3"
+            onClick={() => onSelect("DRIVERS_LICENSE")}
+            disabled={hasDriversLicense}
+          >
+            <span className="text-2xl">🚗</span>
+            <div className="text-left">
+              <p className="font-medium">Driver&apos;s License</p>
+              <p className="text-xs text-muted-foreground">
+                {hasDriversLicense
+                  ? "Already added"
+                  : "Add your driver's license"}
+              </p>
+            </div>
+          </Button>
           <Button
             variant="outline"
             className="h-16 justify-start gap-3"
@@ -93,14 +151,16 @@ export function DocumentSelector({
           <Button
             variant="outline"
             className="h-16 justify-start gap-3"
-            onClick={() => onSelect("BCID")}
-            disabled={hasBCID}
+            onClick={() => onSelect("BC_SERVICES")}
+            disabled={hasBCServices}
           >
             <span className="text-2xl">🪪</span>
             <div className="text-left">
-              <p className="font-medium">BC ID</p>
+              <p className="font-medium">BC Services Card</p>
               <p className="text-xs text-muted-foreground">
-                {hasBCID ? "Already added" : "Add your BC Services Card"}
+                {hasBCServices
+                  ? "Already added"
+                  : "Add your BC Services Card (PHN)"}
               </p>
             </div>
           </Button>
@@ -108,7 +168,7 @@ export function DocumentSelector({
       </div>
 
       {/* Show done if all documents added */}
-      {hasPassport && hasBCID && (
+      {hasPassport && hasBCServices && hasDriversLicense && (
         <p className="text-center text-sm text-muted-foreground">
           All documents have been added!
         </p>

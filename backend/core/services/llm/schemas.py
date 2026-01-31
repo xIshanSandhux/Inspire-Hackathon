@@ -10,6 +10,7 @@ class DocumentType(str, Enum):
 
     DRIVERS_LICENSE = "drivers_license"
     PASSPORT = "passport"
+    BC_SERVICES = "bc_services"  # BC Services Card (health card)
     HEALTH_CARD = "health_card"
     BIRTH_CERTIFICATE = "birth_certificate"
     SIN_CARD = "sin_card"

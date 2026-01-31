@@ -8,6 +8,18 @@ const USE_MOCK = false;
 // Fixed fingerprint ID for demo purposes
 export const DEMO_FINGERPRINT_ID = "fp_demo_123456789";
 
+// Document type mapping: Frontend display name -> Backend API value
+export const DOCUMENT_TYPES = {
+  DRIVERS_LICENSE: "drivers_license",
+  BC_SERVICES: "bc_services",
+  PASSPORT: "passport",
+  // Legacy aliases
+  BCID: "bc_services",
+} as const;
+
+export type FrontendDocumentType = keyof typeof DOCUMENT_TYPES;
+export type BackendDocumentType = (typeof DOCUMENT_TYPES)[FrontendDocumentType];
+
 interface DocumentMetadata {
   [key: string]: unknown;
 }
@@ -54,12 +66,15 @@ const getM2MToken = () => {
 let mockDocuments: Documents = {};
 
 // Mock delay helper
-const mockDelay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const mockDelay = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 // Create Identity - sends fingerprint hash and creates identity if not exists
 export const useCreateIdentity = () => {
   return useMutation({
-    mutationFn: async (fingerprintHash: string): Promise<CreateIdentityResponse> => {
+    mutationFn: async (
+      fingerprintHash: string,
+    ): Promise<CreateIdentityResponse> => {
       if (USE_MOCK) {
         await mockDelay(1000);
         return {
@@ -71,7 +86,7 @@ export const useCreateIdentity = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${getM2MToken()}`,
+          Authorization: `Bearer ${getM2MToken()}`,
         },
         body: JSON.stringify({ fingerprint_hash: fingerprintHash }),
       });
@@ -94,13 +109,20 @@ export const useUploadDocument = () => {
     mutationFn: async ({
       fingerprintHash,
       imageFile,
+      documentType,
     }: {
       fingerprintHash: string;
       imageFile: File;
+      documentType?: FrontendDocumentType;
     }): Promise<AddDocumentResponse> => {
+      // Map frontend type to backend type
+      const backendDocType = documentType
+        ? DOCUMENT_TYPES[documentType]
+        : undefined;
+
       if (USE_MOCK) {
         await mockDelay(2000); // Simulate processing time
-        
+
         const mockDoc: Document = {
           id: "DOC" + Math.random().toString(36).substring(2, 11).toUpperCase(),
           metadata: {
@@ -111,8 +133,8 @@ export const useUploadDocument = () => {
           },
         };
 
-        // Store in mock storage with a generic type
-        const mockDocType = "PASSPORT";
+        // Store in mock storage with the document type
+        const mockDocType = backendDocType || "passport";
         mockDocuments[mockDocType] = mockDoc;
 
         return {
@@ -129,10 +151,15 @@ export const useUploadDocument = () => {
       formData.append("fingerprint_hash", fingerprintHash);
       formData.append("image", imageFile);
 
+      // Add document_type if provided (enables tailored extraction prompts)
+      if (backendDocType) {
+        formData.append("document_type", backendDocType);
+      }
+
       const response = await fetch(`${API_BASE_URL}/document/add-document`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${getM2MToken()}`,
+          Authorization: `Bearer ${getM2MToken()}`,
           // Note: Don't set Content-Type for FormData, browser sets it with boundary
         },
         body: formData,
@@ -159,7 +186,7 @@ export const useUserInfo = () => {
     mutationFn: async (fingerprintHash: string): Promise<UserInfoResponse> => {
       if (USE_MOCK) {
         await mockDelay(1500);
-        
+
         // Return mock user data
         return {
           fingerprint_hash: fingerprintHash,
@@ -171,7 +198,7 @@ export const useUserInfo = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${getM2MToken()}`,
+          Authorization: `Bearer ${getM2MToken()}`,
         },
         body: JSON.stringify({ fingerprint_hash: fingerprintHash }),
       });
@@ -194,11 +221,13 @@ export const resetMockData = () => {
   mockDocuments = {};
 };
 
-export type { 
-  Documents, 
-  Document, 
-  CreateIdentityResponse, 
+export type {
+  AddDocumentResponse,
+  BackendDocumentType,
+  CreateIdentityResponse,
+  Document,
+  Documents,
+  FrontendDocumentType,
   RetrieveIdentityResponse,
-  AddDocumentResponse, 
-  UserInfoResponse 
+  UserInfoResponse,
 };
