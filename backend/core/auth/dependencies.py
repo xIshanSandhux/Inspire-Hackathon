@@ -1,5 +1,6 @@
 """FastAPI dependencies for authentication."""
 
+import base64
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
@@ -15,6 +16,35 @@ logger = get_logger(__name__)
 _auth_provider: ClerkAuthProvider | None = None
 # Set when Clerk secret is present but JWKS URL cannot be derived (avoids retrying on every request)
 _jwks_unavailable: bool = False
+
+
+def _decode_clerk_publishable_key(publishable_key: str) -> str:
+    """
+    Decode Clerk publishable key to extract the frontend API domain.
+    
+    Clerk publishable keys are formatted as: pk_test_<base64> or pk_live_<base64>
+    The base64 portion decodes to the Clerk domain (e.g., "example.clerk.accounts.dev$")
+    
+    Args:
+        publishable_key: The full Clerk publishable key.
+        
+    Returns:
+        The Clerk frontend API domain.
+        
+    Raises:
+        ValueError: If the key cannot be decoded.
+    """
+    # Remove prefix
+    key_parts = publishable_key.replace("pk_test_", "").replace("pk_live_", "")
+    
+    # Add padding if needed (base64 requires length to be multiple of 4)
+    padding_needed = 4 - (len(key_parts) % 4)
+    if padding_needed != 4:
+        key_parts += "=" * padding_needed
+    
+    # Decode and clean up
+    decoded = base64.b64decode(key_parts).decode("utf-8")
+    return decoded.rstrip("$")
 
 
 def get_auth_provider() -> ClerkAuthProvider | None:
@@ -38,23 +68,8 @@ def get_auth_provider() -> ClerkAuthProvider | None:
         if settings.clerk_jwks_url:
             jwks_url = settings.clerk_jwks_url
         elif settings.clerk_publishable_key:
-            # The publishable key is base64 encoded: pk_test_<base64> or pk_live_<base64>
-            # Decode it to get the Clerk frontend API domain
-            import base64
-
-            key_parts = settings.clerk_publishable_key.replace("pk_test_", "").replace(
-                "pk_live_", ""
-            )
             try:
-                # Add padding if needed (base64 requires length to be multiple of 4)
-                padding_needed = 4 - (len(key_parts) % 4)
-                if padding_needed != 4:
-                    key_parts += "=" * padding_needed
-                
-                # Decode base64 to get domain (e.g., "first-duckling-82.clerk.accounts.dev$")
-                decoded = base64.b64decode(key_parts).decode("utf-8")
-                # Remove trailing $ if present
-                clerk_domain = decoded.rstrip("$")
+                clerk_domain = _decode_clerk_publishable_key(settings.clerk_publishable_key)
                 jwks_url = f"https://{clerk_domain}/.well-known/jwks.json"
                 logger.info(f"[AUTH] Derived JWKS URL: {jwks_url}")
             except Exception as e:

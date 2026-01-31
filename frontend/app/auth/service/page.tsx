@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { API_BASE_URL } from "@/api/config";
 
 export default function ServiceAuthPage() {
   const [token, setToken] = useState("");
@@ -25,14 +26,35 @@ export default function ServiceAuthPage() {
     setLoading(true);
 
     try {
-      // Simple token validation - you can add your own logic here
       if (!token || token.trim().length === 0) {
         throw new Error("Token is required");
       }
 
-      // Store authentication in localStorage
+      // Validate the token against the backend
+      const response = await fetch(`${API_BASE_URL}/auth/validate`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token.trim()}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to validate token");
+      }
+
+      const data = await response.json();
+
+      if (!data.valid) {
+        throw new Error("Invalid token");
+      }
+
+      if (data.user_type !== "service") {
+        throw new Error("This token is not a service token");
+      }
+
+      // Token is valid - store authentication in localStorage
       localStorage.setItem("service_auth", "authenticated");
-      localStorage.setItem("service_token", token);
+      localStorage.setItem("service_token", token.trim());
 
       // Redirect to service dashboard on success
       router.push("/service/dashboard");

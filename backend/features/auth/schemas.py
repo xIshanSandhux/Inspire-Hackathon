@@ -37,3 +37,10 @@ class CreateM2MTokenResponse(BaseModel):
 
     token: str
     expires_at: str | None
+
+
+class ValidateTokenResponse(BaseModel):
+    """Response from validating an API token."""
+
+    valid: bool
+    user_type: str | None = None  # "service" for API keys, "user" for JWTs
