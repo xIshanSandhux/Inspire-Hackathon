@@ -60,11 +60,19 @@ async def add_document(
     logger.info(f"  - extracted.confidence: {extracted.confidence}")
     logger.debug(f"  - extracted.metadata: {extracted.metadata}")
 
+    # Filter metadata to only include user-relevant fields
+    raw_metadata = document.doc_metadata or {}
+    user_fields = {
+        "first_name", "last_name", "date_of_birth", "expiry_date", "issue_date",
+        "address", "sex", "issuing_authority", "nationality", "place_of_birth",
+    }
+    filtered_metadata = {k: v for k, v in raw_metadata.items() if k in user_fields}
+
     response = AddDocumentResponse(
         fingerprint_hash=fingerprint_hash,
         document_type=document.document_type,
         id=document.document_id,
-        metadata=document.doc_metadata or {},
+        metadata=filtered_metadata,
         confidence=extracted.confidence,
     )
     
