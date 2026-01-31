@@ -1,0 +1,521 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Inspire Hackathon API",
+    "description": "Document vaulting system for identity management. This API provides endpoints for managing identities via fingerprint hashes and storing associated documents extracted from images.",
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "auth",
+      "description": "Authentication and user management via Clerk"
+    },
+    {
+      "name": "identity",
+      "description": "Identity creation and retrieval"
+    },
+    {
+      "name": "document",
+      "description": "Document upload and management"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health Check",
+        "description": "Check if the API is healthy and return the current environment.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/create-m2m": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Create M2M Token",
+        "description": "Create a machine-to-machine (M2M) token via Clerk. This endpoint proxies the request to Clerk's Backend API using the server's secret key, creating a token with 365-day expiration. This is a backend-only endpoint secured by the server's Clerk secret.",
+        "operationId": "createM2MToken",
+        "responses": {
+          "200": {
+            "description": "M2M token created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateM2MTokenResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Clerk API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Clerk authentication is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/create-user": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Create User",
+        "description": "Create a Clerk user with role metadata. This endpoint proxies the request to Clerk's Backend API using the server's secret key to create a new user with the specified role. This is a backend-only endpoint secured by the server's Clerk secret.",
+        "operationId": "createUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateUserResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Clerk API error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Clerk authentication is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identity/create": {
+      "post": {
+        "tags": ["identity"],
+        "summary": "Create Identity",
+        "description": "Create a new identity if it doesn't exist. The fingerprint_hash is encrypted before storage. Returns the same fingerprint_hash as provided.",
+        "operationId": "createIdentity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIdentityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identity created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateIdentityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/identity/retrieve": {
+      "post": {
+        "tags": ["identity"],
+        "summary": "Retrieve Identity",
+        "description": "Retrieve an identity and all associated documents by fingerprint hash.",
+        "operationId": "retrieveIdentity",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrieveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identity retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrieveResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Identity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/document/add-document": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Add Document",
+        "description": "Add a document to an identity from an uploaded image. The image is processed to extract document type, ID, and metadata. If the document_type already exists for this identity, it will be updated. Returns 404 if identity not found.",
+        "operationId": "addDocument",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["fingerprint_hash", "image"],
+                "properties": {
+                  "fingerprint_hash": {
+                    "type": "string",
+                    "description": "The fingerprint hash of the identity to add the document to"
+                  },
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The document image file to upload and process"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document added successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDocumentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Identity not found. Create identity first with /identity/create",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Clerk JWT token or M2M token for authentication"
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status", "env"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "healthy"
+          },
+          "env": {
+            "type": "string",
+            "description": "Current application environment",
+            "example": "development"
+          }
+        }
+      },
+      "HTTPError": {
+        "type": "object",
+        "required": ["detail"],
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Error message describing what went wrong"
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": ["gov", "admin"],
+        "description": "User role for public_metadata"
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "required": ["first_name", "last_name", "email", "password", "role"],
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "description": "User's first name"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "User's last name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User's password"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "CreateUserResponse": {
+        "type": "object",
+        "required": ["id", "email", "public_metadata"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Clerk user ID"
+          },
+          "email": {
+            "type": "string",
+            "description": "User's email address"
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's first name"
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's last name"
+          },
+          "public_metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Public metadata including role"
+          }
+        }
+      },
+      "CreateM2MTokenResponse": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The M2M JWT token"
+          },
+          "expires_at": {
+            "type": "string",
+            "nullable": true,
+            "description": "ISO timestamp when the token expires"
+          }
+        }
+      },
+      "CreateIdentityRequest": {
+        "type": "object",
+        "required": ["fingerprint_hash"],
+        "properties": {
+          "fingerprint_hash": {
+            "type": "string",
+            "description": "The fingerprint hash to register"
+          }
+        }
+      },
+      "CreateIdentityResponse": {
+        "type": "object",
+        "required": ["fingerprint_hash"],
+        "properties": {
+          "fingerprint_hash": {
+            "type": "string",
+            "description": "The same fingerprint hash as input"
+          }
+        }
+      },
+      "RetrieveRequest": {
+        "type": "object",
+        "required": ["fingerprint_hash"],
+        "properties": {
+          "fingerprint_hash": {
+            "type": "string",
+            "description": "The fingerprint hash to look up"
+          }
+        }
+      },
+      "RetrieveResponse": {
+        "type": "object",
+        "required": ["fingerprint_hash", "documents"],
+        "properties": {
+          "fingerprint_hash": {
+            "type": "string",
+            "description": "The fingerprint hash of the identity"
+          },
+          "documents": {
+            "type": "object",
+            "description": "Documents keyed by document_type (e.g., 'drivers_license', 'passport')",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DocumentInfo"
+            }
+          }
+        }
+      },
+      "DocumentInfo": {
+        "type": "object",
+        "required": ["id", "metadata"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The document ID extracted from the document"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Additional metadata extracted from the document"
+          }
+        }
+      },
+      "AddDocumentResponse": {
+        "type": "object",
+        "required": [
+          "fingerprint_hash",
+          "document_type",
+          "id",
+          "metadata",
+          "confidence"
+        ],
+        "properties": {
+          "fingerprint_hash": {
+            "type": "string",
+            "description": "The fingerprint hash of the identity"
+          },
+          "document_type": {
+            "type": "string",
+            "description": "The type of document detected (e.g., 'drivers_license', 'passport')"
+          },
+          "id": {
+            "type": "string",
+            "description": "The document ID extracted from the document"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Additional metadata extracted from the document"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Confidence score of document extraction (0-1)"
+          }
+        }
+      }
+    }
+  }
+}
