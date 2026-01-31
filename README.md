@@ -38,4 +38,6 @@ make test             # Backend pytest
 
 ---
 
-See `PROJECT_CONTEXT.md` for problem statement and use cases.
+# Presentation link
+
+https://docs.google.com/presentation/d/1tD6U19FRvFxaWvYWLvJNTvwJ6LIIs2Dozox-dK9dIM4/edit?usp=sharing
