@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from backend.core.auth import RequiredUser
 from backend.core.util import get_logger
+from backend.features.document.constants import filter_metadata_for_user
 from backend.features.document.schemas import AddDocumentResponse
 from backend.features.document.service import DocumentServiceDep
 
@@ -59,14 +60,9 @@ async def add_document(
     logger.info(f"  - extracted.confidence: {extracted.confidence}")
     logger.debug(f"  - extracted.metadata: {extracted.metadata}")
 
-    # Use extracted values (unencrypted) for the response
+    # Use extracted values (unencrypted) for the response; filter to user-facing metadata only
     # Note: document.document_id and document.doc_metadata are stored encrypted
-    raw_metadata = extracted.metadata or {}
-    user_fields = {
-        "first_name", "last_name", "date_of_birth", "expiry_date", "issue_date",
-        "address", "sex", "issuing_authority", "nationality", "place_of_birth",
-    }
-    filtered_metadata = {k: v for k, v in raw_metadata.items() if k in user_fields}
+    filtered_metadata = filter_metadata_for_user(extracted.metadata)
 
     response = AddDocumentResponse(
         fingerprint_hash=fingerprint_hash,

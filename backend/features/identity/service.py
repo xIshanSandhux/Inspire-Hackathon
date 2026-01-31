@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.crypto import decrypt_json, decrypt_value, encrypt_value, hash_for_lookup
 from backend.core.db import get_db
+from backend.features.document.constants import filter_metadata_for_user
 from backend.features.identity.models import Identity
 from backend.features.identity.schemas import DocumentInfo, RetrieveResponse
 
@@ -55,16 +56,17 @@ class IdentityService:
         if not identity:
             return None
 
-        # Build documents dict keyed by document_type, decrypting sensitive fields
+        # Build documents dict keyed by document_type, decrypting and filtering metadata
         documents: dict[str, DocumentInfo] = {}
         for doc in identity.documents:
-            # Decrypt the document_id and metadata
             decrypted_id = decrypt_value(doc.document_id)
             decrypted_metadata = decrypt_json(doc.doc_metadata)
+            # Only return user-facing metadata (exclude raw_text, service, id_extraction_method, etc.)
+            filtered_metadata = filter_metadata_for_user(decrypted_metadata)
             
             documents[doc.document_type] = DocumentInfo(
                 id=decrypted_id,
-                metadata=decrypted_metadata or {},
+                metadata=filtered_metadata,
             )
 
         return RetrieveResponse(
