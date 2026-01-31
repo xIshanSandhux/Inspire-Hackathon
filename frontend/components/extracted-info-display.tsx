@@ -7,9 +7,28 @@ import { Button } from "@/components/ui/button";
 import type { Document } from "@/api/useIdentity";
 
 interface ExtractedInfoDisplayProps {
-  documentType: "PASSPORT" | "BCID";
+  documentType: string;
   document: Document;
   onComplete: () => void;
+}
+
+// Helper to get display name and icon for document type
+function getDocumentDisplay(docType: string): { name: string; icon: string } {
+  const typeUpper = docType.toUpperCase();
+  if (typeUpper.includes("PASSPORT")) {
+    return { name: "Passport", icon: "🛂" };
+  } else if (typeUpper.includes("BCID") || typeUpper.includes("BC_ID") || typeUpper.includes("BC ID")) {
+    return { name: "BC ID", icon: "🪪" };
+  } else if (typeUpper.includes("DRIVER") || typeUpper.includes("LICENSE")) {
+    return { name: "Driver's License", icon: "🚗" };
+  } else if (typeUpper.includes("HEALTH")) {
+    return { name: "Health Card", icon: "🏥" };
+  }
+  // Default: format the type nicely
+  return { 
+    name: docType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()), 
+    icon: "📄" 
+  };
 }
 
 export function ExtractedInfoDisplay({
@@ -18,6 +37,7 @@ export function ExtractedInfoDisplay({
   onComplete,
 }: ExtractedInfoDisplayProps) {
   const [countdown, setCountdown] = useState(30);
+  const docDisplay = getDocumentDisplay(documentType);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,15 +81,14 @@ export function ExtractedInfoDisplay({
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-2">Document Verified!</h2>
         <p className="text-muted-foreground">
-          Your {documentType === "PASSPORT" ? "Passport" : "BC ID"} has been
-          successfully processed
+          Your {docDisplay.name} has been successfully processed
         </p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {documentType === "PASSPORT" ? "🛂 Passport" : "🪪 BC ID"} Details
+            {docDisplay.icon} {docDisplay.name} Details
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -84,7 +103,7 @@ export function ExtractedInfoDisplay({
                   .replace(/_/g, " ")
                   .replace(/\b\w/g, (l) => l.toUpperCase())}
               </span>
-              <span>{value}</span>
+              <span>{String(value)}</span>
             </div>
           ))}
         </CardContent>

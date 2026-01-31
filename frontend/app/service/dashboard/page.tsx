@@ -10,24 +10,40 @@ import { DocumentSelector } from "@/components/document-selector";
 import { CameraCapture } from "@/components/camera-capture";
 import { ExtractedInfoDisplay } from "@/components/extracted-info-display";
 import {
-  useUpsertIdentity,
+  useCreateIdentity,
   useUploadDocument,
   type Documents,
   type Document,
+  type AddDocumentResponse,
 } from "@/api/useIdentity";
 
 type FlowStep = "scan" | "select" | "capture" | "result";
+
+// Helper function to convert base64 to File
+function base64ToFile(base64: string, filename: string): File {
+  const arr = base64.split(",");
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+}
 
 export default function ServiceDashboard() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<FlowStep>("scan");
   const [isScanning, setIsScanning] = useState(false);
-  const [fingerprintId, setFingerprintId] = useState<string | null>(null);
+  const [fingerprintHash, setFingerprintHash] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Documents>({});
   const [selectedDocType, setSelectedDocType] = useState<"PASSPORT" | "BCID" | null>(null);
   const [extractedDocument, setExtractedDocument] = useState<Document | null>(null);
+  const [extractedDocType, setExtractedDocType] = useState<string | null>(null);
 
-  const upsertIdentity = useUpsertIdentity();
+  const createIdentity = useCreateIdentity();
   const uploadDocument = useUploadDocument();
 
   useEffect(() => {
@@ -38,15 +54,16 @@ export default function ServiceDashboard() {
   }, [router]);
 
   const handleScanComplete = async (id: string) => {
-    setFingerprintId(id);
+    setFingerprintHash(id);
     setIsScanning(false);
 
     try {
-      const result = await upsertIdentity.mutateAsync(id);
-      setDocuments(result.documents || {});
+      await createIdentity.mutateAsync(id);
+      // Identity created successfully, move to document selection
+      setDocuments({});
       setCurrentStep("select");
     } catch (error) {
-      console.error("Failed to upsert identity:", error);
+      console.error("Failed to create identity:", error);
       // For demo, continue anyway with empty documents
       setDocuments({});
       setCurrentStep("select");
@@ -59,20 +76,24 @@ export default function ServiceDashboard() {
   };
 
   const handleCapture = async (imageBase64: string) => {
-    if (!fingerprintId || !selectedDocType) return;
+    if (!fingerprintHash || !selectedDocType) return;
 
     try {
-      const result = await uploadDocument.mutateAsync({
-        fingerprintId,
-        documentType: selectedDocType,
-        imageBase64,
+      // Convert base64 to File for multipart upload
+      const imageFile = base64ToFile(imageBase64, `document_${Date.now()}.jpg`);
+      
+      const result: AddDocumentResponse = await uploadDocument.mutateAsync({
+        fingerprintHash,
+        imageFile,
       });
 
-      const doc = result[selectedDocType];
-      if (doc) {
-        setExtractedDocument(doc);
-        setCurrentStep("result");
-      }
+      // Extract document info from response
+      setExtractedDocument({
+        id: result.id,
+        metadata: result.metadata,
+      });
+      setExtractedDocType(result.document_type);
+      setCurrentStep("result");
     } catch (error) {
       console.error("Failed to upload document:", error);
       // For demo, show mock result
@@ -83,6 +104,7 @@ export default function ServiceDashboard() {
             ? { country: "Canada", expiry_date: "2030-12-31" }
             : { issued_by: "BC Services Card", issue_date: "2020-01-01" },
       });
+      setExtractedDocType(selectedDocType);
       setCurrentStep("result");
     }
   };
@@ -94,10 +116,11 @@ export default function ServiceDashboard() {
 
   const handleReset = () => {
     setCurrentStep("scan");
-    setFingerprintId(null);
+    setFingerprintHash(null);
     setDocuments({});
     setSelectedDocType(null);
     setExtractedDocument(null);
+    setExtractedDocType(null);
     setIsScanning(false);
   };
 
@@ -122,10 +145,10 @@ export default function ServiceDashboard() {
             >
               <FingerprintScanner
                 onScanComplete={handleScanComplete}
-                isScanning={isScanning || upsertIdentity.isPending}
+                isScanning={isScanning || createIdentity.isPending}
                 setIsScanning={setIsScanning}
               />
-              {upsertIdentity.isPending && (
+              {createIdentity.isPending && (
                 <p className="text-center text-sm text-muted-foreground mt-4">
                   Verifying identity...
                 </p>
@@ -171,7 +194,7 @@ export default function ServiceDashboard() {
             </motion.div>
           )}
 
-          {currentStep === "result" && extractedDocument && selectedDocType && (
+          {currentStep === "result" && extractedDocument && extractedDocType && (
             <motion.div
               key="result"
               initial={{ opacity: 0 }}
@@ -182,7 +205,7 @@ export default function ServiceDashboard() {
               <Card className="w-full max-w-md">
                 <CardContent className="pt-6">
                   <ExtractedInfoDisplay
-                    documentType={selectedDocType}
+                    documentType={extractedDocType}
                     document={extractedDocument}
                     onComplete={handleReset}
                   />

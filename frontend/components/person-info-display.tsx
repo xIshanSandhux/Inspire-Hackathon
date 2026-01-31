@@ -10,11 +10,30 @@ interface PersonInfoDisplayProps {
   onScanAnother: () => void;
 }
 
+// Helper to get display name and icon for document type
+function getDocumentDisplay(docType: string): { name: string; icon: string } {
+  const typeUpper = docType.toUpperCase();
+  if (typeUpper.includes("PASSPORT")) {
+    return { name: "Passport", icon: "🛂" };
+  } else if (typeUpper.includes("BCID") || typeUpper.includes("BC_ID") || typeUpper.includes("BC ID")) {
+    return { name: "BC ID", icon: "🪪" };
+  } else if (typeUpper.includes("DRIVER") || typeUpper.includes("LICENSE")) {
+    return { name: "Driver's License", icon: "🚗" };
+  } else if (typeUpper.includes("HEALTH")) {
+    return { name: "Health Card", icon: "🏥" };
+  }
+  // Default: format the type nicely
+  return { 
+    name: docType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()), 
+    icon: "📄" 
+  };
+}
+
 export function PersonInfoDisplay({
   userInfo,
   onScanAnother,
 }: PersonInfoDisplayProps) {
-  const hasDocuments = userInfo.documents && (userInfo.documents.PASSPORT || userInfo.documents.BCID);
+  const hasDocuments = userInfo.documents && Object.keys(userInfo.documents).length > 0;
 
   return (
     <motion.div
@@ -44,7 +63,7 @@ export function PersonInfoDisplay({
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-1">Citizen Identified</h2>
         <p className="text-sm text-muted-foreground font-mono">
-          ID: {userInfo.fingerprint_id}
+          ID: {userInfo.fingerprint_hash}
         </p>
       </div>
 
@@ -54,67 +73,40 @@ export function PersonInfoDisplay({
           <CardTitle className="text-base">Identity Record</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          {userInfo.created_at && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">First Registered</span>
-              <span>{new Date(userInfo.created_at).toLocaleDateString()}</span>
-            </div>
-          )}
-          {userInfo.last_verified && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Last Verified</span>
-              <span>{new Date(userInfo.last_verified).toLocaleString()}</span>
-            </div>
-          )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Status</span>
+            <span className="text-green-600 font-medium">Verified</span>
+          </div>
         </CardContent>
       </Card>
 
       {/* Documents */}
       {hasDocuments ? (
         <div className="space-y-4">
-          {userInfo.documents.PASSPORT && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">🛂 Passport</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Document ID</span>
-                  <span className="font-mono">{userInfo.documents.PASSPORT.id}</span>
-                </div>
-                {Object.entries(userInfo.documents.PASSPORT.metadata).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                    </span>
-                    <span>{value}</span>
+          {Object.entries(userInfo.documents).map(([docType, doc]) => {
+            const display = getDocumentDisplay(docType);
+            return (
+              <Card key={docType}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">{display.icon} {display.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Document ID</span>
+                    <span className="font-mono">{doc.id}</span>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {userInfo.documents.BCID && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">🪪 BC ID</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Document ID</span>
-                  <span className="font-mono">{userInfo.documents.BCID.id}</span>
-                </div>
-                {Object.entries(userInfo.documents.BCID.metadata).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                    </span>
-                    <span>{value}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                  {Object.entries(doc.metadata).map(([key, value]) => (
+                    <div key={key} className="flex justify-between">
+                      <span className="text-muted-foreground">
+                        {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                      </span>
+                      <span>{String(value)}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>
